@@ -1,37 +1,97 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+build-backend = "hatchling.build"
+requires = [ "hatchling==1.32.4" ]
 
-[tool.poetry]
+[project]
 name = "openhands-resolver"
-version = "0.3.1"
+version = "0.4.0"
 description = "OpenHands Issue Resolver"
-authors = ["All Hands AI"]
-license = "MIT"
 readme = "README.md"
-repository = "https://github.com/All-Hands-AI/openhands-resolver"
-include = ["poetry.lock"]
-packages = [
-    { include = "openhands_resolver" },
+license = { file = "LICENSE" }
+authors = [ { name = "All Hands AI" } ]
+requires-python = ">=3.12,<3.14"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+dependencies = [
+    "httpx==0.28.1",
+    "jinja2==3.1.6",
+    "openhands-sdk==1.58.1",
+    "openhands-tools==1.58.1",
+    "pydantic==2.14.1",
+    "termcolor==3.3.0",
+]
+urls.Issues = "https://github.com/All-Hands-AI/openhands-resolver/issues"
+urls.Repository = "https://github.com/All-Hands-AI/openhands-resolver"
+scripts.openhands-resolver = "openhands.resolver.resolve_issue:main"
+scripts.openhands-resolver-send-pr = "openhands.resolver.send_pull_request:main"
+
+[dependency-groups]
+dev = [
+    "deptry==0.25.1",
+    "hatchling==1.32.4",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-mock==3.17.0",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-openhands-ai = ">=0.13.1,<0.14.0"
+[tool.hatch]
+build.targets.wheel.packages = [ "openhands" ]
 
-pandas = "^2.2.3"
+[tool.uv]
+exclude-newer = "7 days"
 
-[tool.poetry.group.dev.dependencies]
-mypy = "*"
-ruff = "*"
-black = "*"
-types-requests = "*"
-pre-commit = "*"
-types-toml = "*"
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [ "openhands/resolver/patching" ]
 
-[tool.poetry.group.test.dependencies]
-pytest = ">=6.2.5,<9.0.0"
-pytest-mock = ">=3.14.0"
-pytest-asyncio = "*"
+[tool.ruff.lint]
+select = [
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "PERF", # perflint
+    "PIE",  # flake8-pie
+    "PT",   # flake8-pytest-style
+    "RUF",  # ruff-specific rules
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+ignore = [
+    "E501",    # Line too long, handled by formatter
+    "PLR0913", # Too many arguments in function definition
+    "RUF012",  # Mutable class attributes should be annotated with ClassVar
+]
+per-file-ignores."tests/**" = [ "PLR2004", "PT006", "PT011", "RUF043", "RUF059", "S" ]
+flake8-tidy-imports.ban-relative-imports = "all"
+isort.known-first-party = [ "openhands" ]
 
+[tool.pyproject-fmt]
+column_width = 120
+indent = 4
+keep_full_version = true
+expand_tables = [ "tool.pytest.ini_options", "tool.ruff" ]
 
+[tool.ty]
+src.include = [ "openhands", "tests" ]
+src.exclude = [ "openhands/resolver/patching" ]
+environment.python-version = "3.12"
+rules.unresolved-import = "warn"
+
+[tool.pytest.ini_options]
+testpaths = [ "tests" ]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
