@@ -1,0 +1,163 @@
+from typing import TypedDict, cast
+
+import pytest
+from pydantic import SecretStr
+
+from openhands.resolver.interfaces.azure_devops import AzureDevOpsIssueHandler
+from openhands.resolver.interfaces.forgejo import ForgejoIssueHandler, ForgejoPRHandler
+from openhands.resolver.interfaces.github import GithubIssueHandler, GithubPRHandler
+from openhands.resolver.interfaces.gitlab import GitlabIssueHandler, GitlabPRHandler
+from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue, ServiceContextPR
+from openhands.resolver.issue_handler_factory import IssueHandlerFactory
+from openhands.resolver.provider import ProviderType
+from tests.unit.resolver.compat import LLMConfig
+
+
+class FactoryParams(TypedDict):
+    owner: str
+    repo: str
+    token: str
+    username: str
+    llm: LLMConfig
+
+
+class AzureFactoryParams(FactoryParams):
+    base_domain: str
+
+
+@pytest.fixture
+def llm_config() -> LLMConfig:
+    return LLMConfig(
+        model="test-model",
+        api_key=SecretStr("test-key"),
+    )
+
+
+@pytest.fixture
+def factory_params(llm_config: LLMConfig) -> FactoryParams:
+    return {
+        "owner": "test-owner",
+        "repo": "test-repo",
+        "token": "test-token",
+        "username": "test-user",
+        "llm": llm_config,
+    }
+
+
+@pytest.fixture
+def azure_factory_params(llm_config: LLMConfig) -> AzureFactoryParams:
+    return {
+        "owner": "test-org/test-project",
+        "repo": "test-repo",
+        "token": "test-token",
+        "username": "test-user",
+        "base_domain": "dev.azure.com",
+        "llm": llm_config,
+    }
+
+
+test_cases = [
+    # platform, issue_type, base_domain, expected_context_type, expected_handler_type, use_azure_params
+    (
+        ProviderType.GITHUB,
+        "issue",
+        "github.com",
+        ServiceContextIssue,
+        GithubIssueHandler,
+        False,
+    ),
+    (
+        ProviderType.GITHUB,
+        "pr",
+        "github.com",
+        ServiceContextPR,
+        GithubPRHandler,
+        False,
+    ),
+    (
+        ProviderType.GITLAB,
+        "issue",
+        "gitlab.com",
+        ServiceContextIssue,
+        GitlabIssueHandler,
+        False,
+    ),
+    (
+        ProviderType.GITLAB,
+        "pr",
+        "gitlab.com",
+        ServiceContextPR,
+        GitlabPRHandler,
+        False,
+    ),
+    (
+        ProviderType.FORGEJO,
+        "issue",
+        "codeberg.org",
+        ServiceContextIssue,
+        ForgejoIssueHandler,
+        False,
+    ),
+    (
+        ProviderType.FORGEJO,
+        "pr",
+        "codeberg.org",
+        ServiceContextPR,
+        ForgejoPRHandler,
+        False,
+    ),
+    (
+        ProviderType.AZURE_DEVOPS,
+        "issue",
+        "dev.azure.com",
+        ServiceContextIssue,
+        AzureDevOpsIssueHandler,
+        True,
+    ),
+    (
+        ProviderType.AZURE_DEVOPS,
+        "pr",
+        "dev.azure.com",
+        ServiceContextPR,
+        AzureDevOpsIssueHandler,
+        True,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("platform", "issue_type", "base_domain", "expected_context_type", "expected_handler_type", "use_azure_params"),
+    test_cases,
+)
+def test_handler_creation(
+    factory_params: FactoryParams,
+    azure_factory_params: AzureFactoryParams,
+    platform: ProviderType,
+    issue_type: str,
+    base_domain: str,
+    expected_context_type: type,
+    expected_handler_type: type,
+    use_azure_params: bool,
+) -> None:
+    params = cast(
+        AzureFactoryParams,
+        azure_factory_params if use_azure_params else {**factory_params, "base_domain": base_domain},
+    )
+    factory = IssueHandlerFactory(**params, platform=platform, issue_type=issue_type)
+
+    handler = factory.create()
+
+    assert isinstance(handler, expected_context_type)
+    assert isinstance(handler.strategy, expected_handler_type)
+
+
+def test_invalid_issue_type(factory_params: FactoryParams) -> None:
+    factory = IssueHandlerFactory(
+        **factory_params,
+        platform=ProviderType.GITHUB,
+        issue_type="invalid",
+        base_domain="github.com",
+    )
+
+    with pytest.raises(ValueError, match="Invalid issue type: invalid"):
+        factory.create()

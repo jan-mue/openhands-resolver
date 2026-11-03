@@ -8,3 +8,5 @@ archive/
 .mypy_cache
 .DS_Store
 dist/
+.idea
+.python-version

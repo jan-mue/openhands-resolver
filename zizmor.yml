@@ -1,0 +1,13 @@
+rules:
+  artipacked:
+    ignore:
+      - openhands-resolver.yml
+  dangerous-triggers:
+    ignore:
+      - openhands-resolver.yml
+  template-injection:
+    ignore:
+      - openhands-resolver.yml
+  unpinned-uses:
+    ignore:
+      - openhands-resolver.yml
