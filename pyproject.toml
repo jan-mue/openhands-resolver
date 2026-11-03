@@ -56,28 +56,59 @@ extend-exclude = [ "openhands/resolver/patching" ]
 
 [tool.ruff.lint]
 select = [
+    "A",    # flake8-builtins
+    "ANN",  # flake8-annotations
+    "ARG",  # flake8-unused-arguments
     "B",    # flake8-bugbear
+    "BLE",  # flake8-blind-except
     "C4",   # flake8-comprehensions
+    "D",    # pydocstyle
+    "DOC",  # pydoclint
+    "DTZ",  # flake8-datetimez
     "E",    # pycodestyle errors
+    "ERA",  # no commented-out code
     "F",    # pyflakes
+    "FA",   # flake8-future-annotations
     "I",    # isort
+    "ICN",  # flake8-import-conventions
+    "ISC",  # flake8-implicit-str-concat
+    "LOG",  # flake8-logging
+    "N",    # pep8-naming
     "PERF", # perflint
+    "PGH",  # pygrep-hooks
     "PIE",  # flake8-pie
+    "PL",   # pylint
     "PT",   # flake8-pytest-style
+    "RET",  # flake8-return
     "RUF",  # ruff-specific rules
+    "S",    # flake8-bandit
     "SIM",  # flake8-simplify
+    "SLF",  # flake8-self
+    "TC",   # flake8-type-checking
     "TID",  # flake8-tidy-imports
     "UP",   # pyupgrade
     "W",    # pycodestyle warnings
 ]
 ignore = [
+    "D",       # Docstrings are disabled for now
     "E501",    # Line too long, handled by formatter
+    "PLR0912", # Too many branches
     "PLR0913", # Too many arguments in function definition
-    "RUF012",  # Mutable class attributes should be annotated with ClassVar
+    "PLR0915", # Too many statements
+    "PLR0917", # Too many positional arguments
+    "PT013",   # Incorrect import of pytest
+    "RUF012",  # Mutable class attributes should be annotated as ClassVar
+    "S603",    # subprocess calls use fixed, controlled argument lists
+    "S607",    # Starting a process with a partial executable path (git is resolved via PATH)
+    "TC006",   # Add quotes to type expression in typing.cast()
 ]
-per-file-ignores."tests/**" = [ "PLR2004", "PT006", "PT011", "RUF043", "RUF059", "S" ]
+per-file-ignores."__init__.py" = [ "D104", "F401" ]
+per-file-ignores."tests/**" = [ "D", "PLR2004", "S" ]
+per-file-ignores."tests/unit/resolver/github/test_pr_handler_guess_success.py" = [ "SLF001" ]
+per-file-ignores."tests/unit/resolver/gitlab/test_gitlab_pr_handler_guess_success.py" = [ "SLF001" ]
 flake8-tidy-imports.ban-relative-imports = "all"
 isort.known-first-party = [ "openhands" ]
+pydocstyle.convention = "google"
 
 [tool.pyproject-fmt]
 column_width = 120
@@ -89,6 +120,7 @@ expand_tables = [ "tool.pytest.ini_options", "tool.ruff" ]
 src.include = [ "openhands", "tests" ]
 src.exclude = [ "openhands/resolver/patching" ]
 environment.python-version = "3.12"
+rules.missing-override-decorator = "error"
 rules.unresolved-import = "warn"
 
 [tool.pytest.ini_options]

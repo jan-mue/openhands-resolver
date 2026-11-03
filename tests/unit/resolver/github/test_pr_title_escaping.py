@@ -1,13 +1,18 @@
 import os
 import subprocess
 import tempfile
+from collections.abc import Callable
+from typing import cast
+from unittest.mock import Mock
+
+import pytest
 
 from openhands.resolver.interfaces.issue import Issue
 from openhands.resolver.provider import ProviderType
-from openhands.resolver.send_pull_request import make_commit
+from openhands.resolver.send_pull_request import make_commit, send_pull_request
 
 
-def test_commit_message_with_quotes():
+def test_commit_message_with_quotes() -> None:
     # Create a temporary directory and initialize git repo
     with tempfile.TemporaryDirectory() as temp_dir:
         subprocess.run(["git", "init", temp_dir], check=True)
@@ -47,49 +52,50 @@ def test_commit_message_with_quotes():
         assert commit_msg == expected, f"Expected: {expected}\nGot: {commit_msg}"
 
 
-def test_pr_title_with_quotes(monkeypatch):
+def test_pr_title_with_quotes(monkeypatch: pytest.MonkeyPatch) -> None:
     # Mock requests.post to avoid actual API calls
     class MockResponse:
-        def __init__(self, status_code=201):
+        def __init__(self, status_code: int = 201) -> None:
             self.status_code = status_code
             self.text = ""
 
-        def json(self):
+        def json(self) -> object:
             return {"html_url": "https://github.com/test/test/pull/1"}
 
-        def raise_for_status(self):
+        def raise_for_status(self) -> None:
             pass
 
-    def mock_post(*args, **kwargs):
+    def mock_post(url: str, **kwargs: object) -> MockResponse:
         # Verify that the PR title is not over-escaped
-        data = kwargs.get("json", {})
+        assert url
+        data = cast(dict[str, object], kwargs.get("json", {}))
         title = data.get("title", "")
         expected = "Fix issue #123: Issue with 'quotes' and \"double quotes\" and <class 'ValueError'>"
         assert title == expected, f"PR title was incorrectly escaped.\nExpected: {expected}\nGot: {title}"
         return MockResponse()
 
     class MockGetResponse:
-        def __init__(self, status_code=200):
+        def __init__(self, status_code: int = 200) -> None:
             self.status_code = status_code
             self.text = ""
 
-        def json(self):
+        def json(self) -> object:
             return {"default_branch": "main"}
 
-        def raise_for_status(self):
+        def raise_for_status(self) -> None:
             pass
 
     monkeypatch.setattr("httpx.post", mock_post)
-    monkeypatch.setattr("httpx.get", lambda *args, **kwargs: MockGetResponse())
+    monkeypatch.setattr("httpx.get", Mock(return_value=MockGetResponse()))
     monkeypatch.setattr(
         "openhands.resolver.interfaces.github.GithubIssueHandler.branch_exists",
-        lambda *args, **kwargs: False,
+        Mock(return_value=False),
     )
 
     # Mock subprocess.run to avoid actual git commands
-    original_run = subprocess.run
+    original_run = cast(Callable[..., object], subprocess.run)
 
-    def mock_run(*args, **kwargs):
+    def mock_run(*args: object, **kwargs: object) -> object:
         print(f"Running command: {args[0] if args else kwargs.get('args', [])}")
         if isinstance(args[0], list) and args[0][0] == "git":
             if "push" in args[0]:
@@ -134,8 +140,6 @@ def test_pr_title_with_quotes(monkeypatch):
 
         # Try to send a PR - this will fail if the title is incorrectly escaped
         print("Sending PR...")
-        from openhands.resolver.send_pull_request import send_pull_request
-
         send_pull_request(
             issue=issue,
             token="dummy-token",

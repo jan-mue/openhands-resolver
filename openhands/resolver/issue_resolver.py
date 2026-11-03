@@ -1,3 +1,5 @@
+"""Resolve issues with an OpenHands SDK agent."""
+
 import json
 import os
 import pathlib
@@ -11,10 +13,7 @@ from pydantic import SecretStr
 from termcolor import colored
 
 from openhands.resolver.interfaces.issue import Issue
-from openhands.resolver.interfaces.issue_definitions import (
-    ServiceContextIssue,
-    ServiceContextPR,
-)
+from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue, ServiceContextPR
 from openhands.resolver.issue_handler_factory import IssueHandlerFactory
 from openhands.resolver.provider import ProviderType
 from openhands.resolver.resolver_output import ResolverOutput
@@ -42,6 +41,7 @@ logger = get_logger(__name__)
 
 # Don't make this configurable for now, unless we have other competitive agents
 AGENT_CLASS = "CodeActAgent"
+MIN_REPO_PARTS = 2
 
 
 def _last_error(events: list[Any]) -> str | None:
@@ -52,10 +52,12 @@ def _last_error(events: list[Any]) -> str | None:
 
 
 class IssueResolver:
+    """Resolve one issue or pull request using an SDK conversation."""
+
     def __init__(self, args: Namespace) -> None:
         """Initialize the IssueResolver with the given parameters."""
         parts = args.selected_repo.rsplit("/", 1)
-        if len(parts) < 2:
+        if len(parts) < MIN_REPO_PARTS:
             raise ValueError("Invalid repository format. Expected owner/repo")
         owner, repo = parts
 
@@ -157,6 +159,7 @@ class IssueResolver:
 
     @staticmethod
     def build_workspace_base(output_dir: str, issue_type: str, issue_number: int) -> str:
+        """Return the workspace directory for an issue attempt."""
         workspace_base = os.path.join(output_dir, "workspace", f"{issue_type}_{issue_number}")
         return os.path.abspath(workspace_base)
 
@@ -174,6 +177,7 @@ class IssueResolver:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         if check and result.returncode != 0:
             raise RuntimeError(
@@ -201,7 +205,7 @@ class IssueResolver:
             logger.info("Installing .openhands/pre-commit.sh git hook")
             destination = os.path.join(hooks_dir, "pre-commit")
             shutil.copy2(hook_script, destination)
-            os.chmod(destination, 0o755)
+            os.chmod(destination, 0o700)
 
     def complete_workspace(self, workspace: LocalWorkspace, base_commit: str) -> dict[str, Any]:
         """Collect the git patch produced by the agent."""
@@ -241,6 +245,7 @@ class IssueResolver:
         issue_handler: ServiceContextIssue | ServiceContextPR,
         reset_logger: bool = False,
     ) -> ResolverOutput:
+        """Run the agent against one issue and return its resolver output."""
         if reset_logger:
             log_dir = os.path.join(self.output_dir, "infer_logs")
             reset_logger_for_multiprocessing(logger, str(issue.number), log_dir)
@@ -345,6 +350,7 @@ class IssueResolver:
         )
 
     def extract_issue(self) -> Issue:
+        """Fetch and return the issue configured for this resolver."""
         issues: list[Issue] = self.issue_handler.get_converted_issues(
             issue_numbers=[self.issue_number], comment_id=self.comment_id
         )
@@ -397,7 +403,14 @@ class IssueResolver:
             if "fatal" in checkout_output:
                 raise RuntimeError(f"Failed to clone repository: {checkout_output}")
 
-        base_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_dir).decode("utf-8").strip()
+        base_commit = (
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_dir,
+            )
+            .decode("utf-8")
+            .strip()
+        )
         logger.info(f"Base commit: {base_commit}")
 
         if self.repo_instruction is None:
@@ -417,42 +430,45 @@ class IssueResolver:
                         logger.warning(f"Issue {self.issue_number} was already processed. Skipping.")
                         return
 
-        output_fp = open(output_file, "a")  # noqa: SIM115
-
-        logger.info(
-            f"Resolving issue {self.issue_number} with Agent {AGENT_CLASS}, model {model_name}, max iterations {self.max_iterations}."
-        )
-
-        try:
-            if self.issue_type == "pr":
-                branch_to_use = issue.head_branch
-                logger.info(f"Checking out to PR branch {branch_to_use} for issue {issue.number}")
-
-                if not branch_to_use:
-                    raise ValueError("Branch name cannot be None")
-
-                subprocess.check_output(
-                    ["git", "fetch", "origin", branch_to_use],
-                    cwd=repo_dir,
-                )
-                subprocess.check_output(
-                    ["git", "checkout", branch_to_use],
-                    cwd=repo_dir,
-                )
-
-                base_commit = (
-                    subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_dir).decode("utf-8").strip()
-                )
-
-            output = await self.process_issue(
-                issue,
-                base_commit,
-                self.issue_handler,
-                reset_logger,
+        with open(output_file, "a") as output_fp:
+            logger.info(
+                f"Resolving issue {self.issue_number} with Agent {AGENT_CLASS}, model {model_name}, max iterations {self.max_iterations}."
             )
-            output_fp.write(output.model_dump_json() + "\n")
-            output_fp.flush()
 
-        finally:
-            output_fp.close()
-            logger.info("Finished.")
+            try:
+                if self.issue_type == "pr":
+                    branch_to_use = issue.head_branch
+                    logger.info(f"Checking out to PR branch {branch_to_use} for issue {issue.number}")
+
+                    if not branch_to_use:
+                        raise ValueError("Branch name cannot be None")
+
+                    subprocess.check_output(
+                        ["git", "fetch", "origin", branch_to_use],
+                        cwd=repo_dir,
+                    )
+                    subprocess.check_output(
+                        ["git", "checkout", branch_to_use],
+                        cwd=repo_dir,
+                    )
+
+                    base_commit = (
+                        subprocess.check_output(
+                            ["git", "rev-parse", "HEAD"],
+                            cwd=repo_dir,
+                        )
+                        .decode("utf-8")
+                        .strip()
+                    )
+
+                output = await self.process_issue(
+                    issue,
+                    base_commit,
+                    self.issue_handler,
+                    reset_logger,
+                )
+                output_fp.write(output.model_dump_json() + "\n")
+                output_fp.flush()
+
+            finally:
+                logger.info("Finished.")

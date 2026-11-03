@@ -1,7 +1,7 @@
 from openhands.resolver.utils import extract_issue_references
 
 
-def test_extract_issue_references():
+def test_extract_issue_references() -> None:
     # Test basic issue reference
     assert extract_issue_references("Fixes #123") == [123]
 

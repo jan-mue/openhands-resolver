@@ -2,7 +2,6 @@
 
 import random
 import time
-from typing import Any
 
 from litellm.exceptions import RateLimitError
 from pydantic import SecretStr
@@ -16,17 +15,23 @@ class LLM:
         self,
         config: "LLMConfig | None" = None,
         service_id: str | None = None,
-        **kwargs: Any,
+        *,
+        model: str | None = None,
+        api_key: str | SecretStr | None = None,
+        base_url: str | None = None,
+        num_retries: int = 0,
+        retry_min_wait: float = 0,
+        retry_max_wait: float = 0,
     ) -> None:
-        self.model = kwargs.pop("model", None) or getattr(config, "model", "test")
-        self.api_key = kwargs.pop("api_key", None) or getattr(config, "api_key", "test")
-        self.base_url = kwargs.pop("base_url", None) or getattr(config, "base_url", None)
-        self.num_retries = kwargs.pop("num_retries", getattr(config, "num_retries", 0))
-        self.retry_min_wait = kwargs.pop("retry_min_wait", getattr(config, "retry_min_wait", 0))
-        self.retry_max_wait = kwargs.pop("retry_max_wait", getattr(config, "retry_max_wait", 0))
+        self.model = model or (config.model if config else "test")
+        self.api_key = api_key or (config.api_key if config else "test")
+        self.base_url = base_url or (config.base_url if config else None)
+        self.num_retries = num_retries or (config.num_retries if config else 0)
+        self.retry_min_wait = retry_min_wait or (config.retry_min_wait if config else 0)
+        self.retry_max_wait = retry_max_wait or (config.retry_max_wait if config else 0)
         self.service_id = service_id
 
-    def completion(self, messages: list[Any], **kwargs: Any) -> Any:
+    def completion(self, messages: list[Message], **kwargs: object) -> object:
         converted = []
         for message in messages:
             if isinstance(message, Message):
@@ -63,33 +68,23 @@ class LLM:
 
 
 class LLMConfig(LLM):
-    def __init__(
-        self,
-        model: str = "test",
-        api_key: str | SecretStr | None = "test",
-        base_url: str | None = None,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            **kwargs,
-        )
+    pass
 
 
 class MessageAction:
-    def __init__(self, content: str = "", image_urls: list[str] | None = None, **_: Any):
+    def __init__(self, content: str = "", image_urls: list[str] | None = None, **_: object) -> None:
         self.content = content
         self.message = content
         self.source = "agent"
         self.image_urls = image_urls or []
 
 
-def message_text(message: Any) -> str:
+def message_text(message: object) -> str:
     if isinstance(message, dict):
         return str(message.get("content", ""))
     content = getattr(message, "content", "")
     if isinstance(content, str):
         return content
-    return "".join(getattr(part, "text", "") for part in content)
+    if isinstance(content, (list, tuple)):
+        return "".join(str(getattr(part, "text", "")) for part in content)
+    return str(content)

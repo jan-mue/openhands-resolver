@@ -1,3 +1,5 @@
+"""Data model for a single resolver result."""
+
 from typing import Any
 
 from pydantic import BaseModel
@@ -6,7 +8,8 @@ from openhands.resolver.interfaces.issue import Issue
 
 
 class ResolverOutput(BaseModel):
-    # NOTE: User-specified
+    """Result produced after attempting to resolve an issue."""
+
     issue: Issue
     issue_type: str
     instruction: str

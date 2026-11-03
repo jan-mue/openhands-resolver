@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from http import HTTPStatus
+from typing import Any, override
 from urllib.parse import quote
 
 import httpx
@@ -28,7 +29,7 @@ class ForgejoIssueHandler(IssueHandlerInterface):
         token: str,
         username: str | None = None,
         base_domain: str = "codeberg.org",
-    ):
+    ) -> None:
         self.owner = owner
         self.repo = repo
         self.token = token
@@ -43,48 +44,60 @@ class ForgejoIssueHandler(IssueHandlerInterface):
         return f"https://{self.base_domain}{self.API_PREFIX}"
 
     @staticmethod
-    def _to_int(value: Any) -> int:
+    def _to_int(value: int | str | None) -> int:
+        if value is None:
+            return 0
         try:
             return int(value)
         except (TypeError, ValueError):
             return 0
 
+    @override
     def set_owner(self, owner: str) -> None:
         self.owner = owner
         self.base_url = self.get_base_url()
         self.download_url = self.get_download_url()
 
+    @override
     def get_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"token {self.token}",
             "Accept": "application/json",
         }
 
+    @override
     def get_base_url(self) -> str:
         return f"{self._api_root()}/repos/{self.owner}/{self.repo}"
 
+    @override
     def get_authorize_url(self) -> str:
         credential = f"{self.username}:{self.token}" if self.username else f"x-auth-token:{self.token}"
         return f"https://{credential}@{self.base_domain}/"
 
+    @override
     def get_branch_url(self, branch_name: str) -> str:
         escaped_branch = quote(branch_name, safe="")
         return f"{self.get_base_url()}/branches/{escaped_branch}"
 
+    @override
     def get_download_url(self) -> str:
         return f"{self.get_base_url()}/issues"
 
+    @override
     def get_clone_url(self) -> str:
         credential = f"{self.username}:{self.token}" if self.username else f"x-access-token:{self.token}"
         return f"https://{credential}@{self.base_domain}/{self.owner}/{self.repo}.git"
 
+    @override
     def get_graphql_url(self) -> str:
         # Forgejo does not expose a GraphQL endpoint.
         return ""
 
+    @override
     def get_compare_url(self, branch_name: str) -> str:
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/compare/{branch_name}"
 
+    @override
     def download_issues(self) -> list[Any]:
         page = 1
         all_issues: list[Any] = []
@@ -106,6 +119,7 @@ class ForgejoIssueHandler(IssueHandlerInterface):
 
         return all_issues
 
+    @override
     def get_issue_comments(self, issue_number: int, comment_id: int | None = None) -> list[str] | None:
         url = f"{self.get_download_url()}/{issue_number}/comments"
         page = 1
@@ -135,9 +149,11 @@ class ForgejoIssueHandler(IssueHandlerInterface):
 
         return all_comments if all_comments else None
 
+    @override
     def get_pull_url(self, pr_number: int) -> str:
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/pulls/{pr_number}"
 
+    @override
     def get_branch_name(self, base_branch_name: str) -> str:
         branch_name = base_branch_name
         attempt = 1
@@ -146,27 +162,31 @@ class ForgejoIssueHandler(IssueHandlerInterface):
             branch_name = f"{base_branch_name}-try{attempt}"
         return branch_name
 
+    @override
     def get_default_branch_name(self) -> str:
         response = httpx.get(self.get_base_url(), headers=self.headers)
         response.raise_for_status()
         data = response.json()
         return str(data.get("default_branch"))
 
+    @override
     def branch_exists(self, branch_name: str) -> bool:
         response = httpx.get(self.get_branch_url(branch_name), headers=self.headers)
-        exists = response.status_code == 200
+        exists = response.status_code == HTTPStatus.OK
         logger.info(f"Branch {branch_name} exists: {exists}")
         return exists
 
+    @override
     def reply_to_comment(self, pr_number: int, comment_id: str, reply: str) -> None:
         # Forgejo does not support threaded replies via API; add a regular comment referencing the original ID.
         message = f"OpenHands reply to comment {comment_id}\n\n{reply}"
         self.send_comment_msg(pr_number, message)
 
+    @override
     def create_pull_request(self, data: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = data or {}
         response = httpx.post(f"{self.get_base_url()}/pulls", headers=self.headers, json=payload)
-        if response.status_code == 403:
+        if response.status_code == HTTPStatus.FORBIDDEN:
             raise RuntimeError(
                 "Failed to create pull request due to missing permissions. "
                 "Ensure the token has write access to the repository."
@@ -178,6 +198,7 @@ class ForgejoIssueHandler(IssueHandlerInterface):
             pr_data["html_url"] = pr_data["url"]
         return dict(pr_data)
 
+    @override
     def request_reviewers(self, reviewer: str, pr_number: int) -> None:
         url = f"{self.get_base_url()}/pulls/{pr_number}/requested_reviewers"
         response = httpx.post(
@@ -185,9 +206,10 @@ class ForgejoIssueHandler(IssueHandlerInterface):
             headers=self.headers,
             json={"reviewers": [reviewer]},
         )
-        if response.status_code not in (200, 201, 204):
+        if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT):
             logger.warning(f"Failed to request review from {reviewer}: {response.status_code} {response.text}")
 
+    @override
     def send_comment_msg(self, issue_number: int, msg: str) -> None:
         comment_url = f"{self.get_download_url()}/{issue_number}/comments"
         response = httpx.post(
@@ -195,9 +217,10 @@ class ForgejoIssueHandler(IssueHandlerInterface):
             headers=self.headers,
             json={"body": msg},
         )
-        if response.status_code not in (200, 201):
+        if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
             logger.error(f"Failed to post comment: {response.status_code} {response.text}")
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -245,6 +268,7 @@ class ForgejoIssueHandler(IssueHandlerInterface):
     def get_pull_url_for_issue(self, issue_number: int) -> str:
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/issues/{issue_number}"
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:
@@ -290,7 +314,7 @@ class ForgejoPRHandler(ForgejoIssueHandler):
         token: str,
         username: str | None = None,
         base_domain: str = "codeberg.org",
-    ):
+    ) -> None:
         super().__init__(owner, repo, token, username, base_domain)
         self.download_url = f"{self.get_base_url()}/pulls"
 
@@ -355,6 +379,7 @@ class ForgejoPRHandler(ForgejoIssueHandler):
 
         return collected if collected else None
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -373,6 +398,7 @@ class ForgejoPRHandler(ForgejoIssueHandler):
             thread_comments,
         )
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:

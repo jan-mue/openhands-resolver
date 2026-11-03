@@ -1,13 +1,9 @@
 import base64
-from typing import Any
+from typing import Any, override
 
 import httpx
 
-from openhands.resolver.interfaces.issue import (
-    Issue,
-    IssueHandlerInterface,
-    ReviewThread,
-)
+from openhands.resolver.interfaces.issue import Issue, IssueHandlerInterface, ReviewThread
 from openhands.resolver.utils import extract_issue_references, httpx_verify_option
 from openhands.sdk import get_logger
 
@@ -22,7 +18,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         token: str,
         username: str | None = None,
         base_domain: str = "bitbucket.org",
-    ):
+    ) -> None:
         """Initialize a Bitbucket issue handler.
 
         Args:
@@ -42,9 +38,11 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         self.clone_url = self.get_clone_url()
         self.headers = self.get_headers()
 
+    @override
     def set_owner(self, owner: str) -> None:
         self.owner = owner
 
+    @override
     def get_headers(self) -> dict[str, str]:
         # Check if the token contains a colon, which indicates it's in username:password format
         if ":" in self.token:
@@ -53,20 +51,22 @@ class BitbucketIssueHandler(IssueHandlerInterface):
                 "Authorization": f"Basic {auth_str}",
                 "Accept": "application/json",
             }
-        else:
-            return {
-                "Authorization": f"Bearer {self.token}",
-                "Accept": "application/json",
-            }
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/json",
+        }
 
+    @override
     def get_base_url(self) -> str:
         """Get the base URL for the Bitbucket API."""
         return f"https://api.{self.base_domain}/2.0"
 
+    @override
     def get_download_url(self) -> str:
         """Get the download URL for the repository."""
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/get/master.zip"
 
+    @override
     def get_clone_url(self) -> str:
         """Get the clone URL for the repository."""
         return f"https://{self.base_domain}/{self.owner}/{self.repo}.git"
@@ -99,7 +99,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
             data = response.json()
 
         # Create a basic Issue object with required fields
-        issue = Issue(
+        return Issue(
             owner=self.owner,
             repo=self.repo,
             number=data.get("id"),
@@ -107,15 +107,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
             body=data.get("content", {}).get("raw", ""),
         )
 
-        return issue
-
-    def create_pr(
-        self,
-        title: str,
-        body: str,
-        head: str,
-        base: str,
-    ) -> str:
+    def create_pr(self, title: str, body: str, head: str, base: str) -> str:
         """Create a pull request.
 
         Args:
@@ -143,6 +135,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
 
         return data.get("links", {}).get("html", {}).get("href", "")
 
+    @override
     def download_issues(self) -> list[Any]:
         """Download all issues from the repository.
 
@@ -152,6 +145,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         logger.warning("BitbucketIssueHandler.download_issues not implemented")
         return []
 
+    @override
     def get_issue_comments(self, issue_number: int, comment_id: int | None = None) -> list[str] | None:
         """Get comments for an issue.
 
@@ -165,6 +159,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         logger.warning("BitbucketIssueHandler.get_issue_comments not implemented")
         return []
 
+    @override
     def get_branch_url(self, branch_name: str) -> str:
         """Get the URL for a branch.
 
@@ -176,6 +171,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/branch/{branch_name}"
 
+    @override
     def get_compare_url(self, branch_name: str) -> str:
         """Get the URL for comparing branches.
 
@@ -187,6 +183,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/compare/master...{branch_name}"
 
+    @override
     def get_authorize_url(self) -> str:
         """Get the URL for authorization.
 
@@ -195,6 +192,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return f"https://oauth2:{self.token}@{self.base_domain}/"
 
+    @override
     def get_pull_url(self, pr_number: int) -> str:
         """Get the URL for a pull request.
 
@@ -206,6 +204,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/pull-requests/{pr_number}"
 
+    @override
     def get_branch_name(self, base_branch_name: str) -> str:
         """Get a unique branch name.
 
@@ -217,6 +216,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return f"{base_branch_name}-{self.owner}"
 
+    @override
     def branch_exists(self, branch_name: str) -> bool:
         """Check if a branch exists.
 
@@ -229,6 +229,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         logger.warning("BitbucketIssueHandler.branch_exists not implemented")
         return False
 
+    @override
     def get_default_branch_name(self) -> str:
         """Get the default branch name.
 
@@ -237,6 +238,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return "master"
 
+    @override
     def create_pull_request(self, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Create a pull request.
 
@@ -277,6 +279,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
             "number": data.get("id", 0),
         }
 
+    @override
     def request_reviewers(self, reviewer: str, pr_number: int) -> None:
         """Request reviewers for a pull request.
 
@@ -286,6 +289,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         logger.warning("BitbucketIssueHandler.request_reviewers not implemented")
 
+    @override
     def send_comment_msg(self, issue_number: int, msg: str) -> None:
         """Send a comment to an issue.
 
@@ -300,11 +304,10 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         response = httpx.post(url, headers=self.headers, json=payload)
         response.raise_for_status()
 
-    def get_issue_thread_comments(self, issue_number: int) -> list[str]:
+    def get_issue_thread_comments(self) -> list[str]:
         """Get thread comments for an issue.
 
         Args:
-            issue_number: The issue number
 
         Returns:
             A list of thread comments
@@ -312,11 +315,10 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         logger.warning("BitbucketIssueHandler.get_issue_thread_comments not implemented")
         return []
 
-    def get_issue_review_comments(self, issue_number: int) -> list[str]:
+    def get_issue_review_comments(self) -> list[str]:
         """Get review comments for an issue.
 
         Args:
-            issue_number: The issue number
 
         Returns:
             A list of review comments
@@ -324,7 +326,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         logger.warning("BitbucketIssueHandler.get_issue_review_comments not implemented")
         return []
 
-    def get_issue_review_threads(self, issue_number: int) -> list[ReviewThread]:
+    def get_issue_review_threads(self) -> list[ReviewThread]:
         """Get review threads for an issue.
 
         Args:
@@ -336,6 +338,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         logger.warning("BitbucketIssueHandler.get_issue_review_threads not implemented")
         return []
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -392,6 +395,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
 
         return closing_issues
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:
@@ -447,6 +451,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
 
         return converted_issues
 
+    @override
     def get_graphql_url(self) -> str:
         """Get the GraphQL URL.
 
@@ -455,6 +460,7 @@ class BitbucketIssueHandler(IssueHandlerInterface):
         """
         return f"https://api.{self.base_domain}/graphql"
 
+    @override
     def reply_to_comment(self, pr_number: int, comment_id: str, reply: str) -> None:
         """Reply to a comment.
 
@@ -492,7 +498,7 @@ class BitbucketPRHandler(BitbucketIssueHandler):
         token: str,
         username: str | None = None,
         base_domain: str = "bitbucket.org",
-    ):
+    ) -> None:
         """Initialize a Bitbucket PR handler.
 
         Args:

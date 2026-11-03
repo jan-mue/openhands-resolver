@@ -2,7 +2,7 @@ from openhands.resolver.patching.apply import apply_diff
 from openhands.resolver.patching.patch import parse_patch
 
 
-def test_patch_whitespace_mismatch():
+def test_patch_whitespace_mismatch() -> None:
     """Test that the patch application succeeds even when whitespace doesn't match."""
     # Original content has a line with spaces
     original_content = """class Example:
@@ -41,7 +41,7 @@ index 1234567..89abcdef 100644
     ]
 
 
-def test_patch_whitespace_match():
+def test_patch_whitespace_match() -> None:
     """Test that the patch application succeeds when whitespace matches."""
     # Original content has an empty line (no spaces)
     original_content = """class Example:

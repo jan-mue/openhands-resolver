@@ -2,18 +2,18 @@ import json
 import os
 import re
 from collections.abc import Sequence
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
 import jinja2
 
-from openhands.resolver.interfaces.issue import (
-    Issue,
-    IssueHandlerInterface,
-    ReviewThread,
-)
+from openhands.resolver.interfaces.issue import Issue, IssueHandlerInterface, ReviewThread
 from openhands.resolver.utils import extract_image_urls
 from openhands.sdk import Message, MessageEvent, TextContent
 from openhands.sdk.llm import content_to_str
+
+
+class LLMClient(Protocol):
+    def completion(self, messages: list[Message], **kwargs: Any) -> object: ...  # noqa: ANN401
 
 
 def _message_text(event: object) -> str | None:
@@ -64,9 +64,14 @@ class ServiceContext:
     issue_type: ClassVar[str]
     default_git_patch: ClassVar[str] = "No changes made yet"
 
-    def __init__(self, strategy: IssueHandlerInterface, llm: Any = None):
+    def __init__(self, strategy: IssueHandlerInterface, llm: LLMClient | None = None) -> None:
         self._strategy = strategy
-        self.llm: Any = llm
+        self.llm: LLMClient | None = llm
+
+    @property
+    def strategy(self) -> IssueHandlerInterface:
+        """Return the underlying issue handler."""
+        return self._strategy
 
     def set_strategy(self, strategy: IssueHandlerInterface) -> None:
         self._strategy = strategy
@@ -76,7 +81,7 @@ class ServiceContext:
 class ServiceContextPR(ServiceContext):
     issue_type: ClassVar[str] = "pr"
 
-    def __init__(self, strategy: IssueHandlerInterface, llm: Any):
+    def __init__(self, strategy: IssueHandlerInterface, llm: LLMClient | None) -> None:
         super().__init__(strategy, llm)
 
     def get_clone_url(self) -> str:
@@ -308,7 +313,7 @@ class ServiceContextPR(ServiceContext):
 class ServiceContextIssue(ServiceContext):
     issue_type: ClassVar[str] = "issue"
 
-    def __init__(self, strategy: IssueHandlerInterface, llm: Any = None):
+    def __init__(self, strategy: IssueHandlerInterface, llm: LLMClient | None = None) -> None:
         super().__init__(strategy, llm)
 
     def get_base_url(self) -> str:

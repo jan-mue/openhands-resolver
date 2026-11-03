@@ -1,3 +1,4 @@
+from typing import override
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -6,15 +7,12 @@ from litellm.exceptions import RateLimitError
 
 from openhands.resolver.interfaces.github import GithubIssueHandler, GithubPRHandler
 from openhands.resolver.interfaces.issue import Issue
-from openhands.resolver.interfaces.issue_definitions import (
-    ServiceContextIssue,
-    ServiceContextPR,
-)
+from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue, ServiceContextPR
 from tests.unit.resolver.compat import LLM, LLMConfig, MessageAction
 
 
 @pytest.fixture
-def default_config():
+def default_config() -> object:
     return LLMConfig(
         model="gpt-4o",
         api_key="test_key",
@@ -24,7 +22,7 @@ def default_config():
     )
 
 
-def test_handle_nonexistent_issue_reference():
+def test_handle_nonexistent_issue_reference() -> None:
     llm_config = LLMConfig(model="test", api_key="test")
     handler = ServiceContextPR(GithubPRHandler("test-owner", "test-repo", "test-token"), llm_config)
 
@@ -34,7 +32,7 @@ def test_handle_nonexistent_issue_reference():
 
     with patch("httpx.get", return_value=mock_response):
         # Call the method with a non-existent issue reference
-        result = handler._strategy.get_context_from_external_issues_references(
+        result = handler.strategy.get_context_from_external_issues_references(
             closing_issues=[],
             closing_issue_numbers=[],
             issue_body="This references #999999",  # Non-existent issue
@@ -47,7 +45,7 @@ def test_handle_nonexistent_issue_reference():
         assert result == []
 
 
-def test_handle_rate_limit_error():
+def test_handle_rate_limit_error() -> None:
     llm_config = LLMConfig(model="test", api_key="test")
     handler = ServiceContextPR(GithubPRHandler("test-owner", "test-repo", "test-token"), llm_config)
 
@@ -57,7 +55,7 @@ def test_handle_rate_limit_error():
 
     with patch("httpx.get", return_value=mock_response):
         # Call the method with an issue reference
-        result = handler._strategy.get_context_from_external_issues_references(
+        result = handler.strategy.get_context_from_external_issues_references(
             closing_issues=[],
             closing_issue_numbers=[],
             issue_body="This references #123",
@@ -70,14 +68,14 @@ def test_handle_rate_limit_error():
         assert result == []
 
 
-def test_handle_network_error():
+def test_handle_network_error() -> None:
     llm_config = LLMConfig(model="test", api_key="test")
     handler = ServiceContextPR(GithubPRHandler("test-owner", "test-repo", "test-token"), llm_config)
 
     # Mock the requests.get to simulate a network error
     with patch("httpx.get", side_effect=httpx.NetworkError("Network Error")):
         # Call the method with an issue reference
-        result = handler._strategy.get_context_from_external_issues_references(
+        result = handler.strategy.get_context_from_external_issues_references(
             closing_issues=[],
             closing_issue_numbers=[],
             issue_body="This references #123",
@@ -90,7 +88,7 @@ def test_handle_network_error():
         assert result == []
 
 
-def test_successful_issue_reference():
+def test_successful_issue_reference() -> None:
     llm_config = LLMConfig(model="test", api_key="test")
     handler = ServiceContextPR(GithubPRHandler("test-owner", "test-repo", "test-token"), llm_config)
 
@@ -101,7 +99,7 @@ def test_successful_issue_reference():
 
     with patch("httpx.get", return_value=mock_response):
         # Call the method with an issue reference
-        result = handler._strategy.get_context_from_external_issues_references(
+        result = handler.strategy.get_context_from_external_issues_references(
             closing_issues=[],
             closing_issue_numbers=[],
             issue_body="This references #123",
@@ -119,20 +117,20 @@ class MockLLMResponse:
 
     class Choice:
         class Message:
-            def __init__(self, content):
+            def __init__(self, content: str) -> None:
                 self.content = content
 
-        def __init__(self, content):
+        def __init__(self, content: str) -> None:
             self.message = self.Message(content)
 
-    def __init__(self, content):
+    def __init__(self, content: str) -> None:
         self.choices = [self.Choice(content)]
 
 
 class DotDict(dict):
     """A dictionary that supports dot notation access."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         for key, value in self.items():
             if isinstance(value, dict):
@@ -140,16 +138,17 @@ class DotDict(dict):
             elif isinstance(value, list):
                 self[key] = [DotDict(item) if isinstance(item, dict) else item for item in value]
 
-    def __getattr__(self, key):
+    def __getattr__(self, key: str) -> object:
         if key in self:
             return self[key]
-        else:
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{key}'")
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{key}'")
 
-    def __setattr__(self, key, value):
+    @override
+    def __setattr__(self, key: str, value: object) -> None:
         self[key] = value
 
-    def __delattr__(self, key):
+    @override
+    def __delattr__(self, key: str) -> None:
         if key in self:
             del self[key]
         else:
@@ -157,7 +156,7 @@ class DotDict(dict):
 
 
 @patch("openhands.sdk.llm.llm.litellm_completion")
-def test_guess_success_rate_limit_wait_time(mock_litellm_completion, default_config):
+def test_guess_success_rate_limit_wait_time(mock_litellm_completion: MagicMock, default_config: LLMConfig) -> None:
     """Test that the retry mechanism in guess_success respects wait time between retries."""
     with patch("time.sleep") as mock_sleep:
         # Simulate a rate limit error followed by a successful response
@@ -198,7 +197,7 @@ def test_guess_success_rate_limit_wait_time(mock_litellm_completion, default_con
 
 
 @patch("openhands.sdk.llm.llm.litellm_completion")
-def test_guess_success_exhausts_retries(mock_completion, default_config):
+def test_guess_success_exhausts_retries(mock_completion: MagicMock, default_config: LLMConfig) -> None:
     """Test the retry mechanism in guess_success exhausts retries and raises an error."""
     # Simulate persistent rate limit errors by always raising RateLimitError
     mock_completion.side_effect = RateLimitError(

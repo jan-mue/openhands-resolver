@@ -1,16 +1,18 @@
+"""Command-line entry point for resolving a single issue."""
+
+import argparse
 import asyncio
 
 from openhands.resolver.issue_resolver import IssueResolver
 
 
 def main() -> None:
-    import argparse
+    """Run the resolver from command-line arguments."""
 
     def int_or_none(value: str) -> int | None:
         if value.lower() == "none":
             return None
-        else:
-            return int(value)
+        return int(value)
 
     parser = argparse.ArgumentParser(description="Resolve a single issue.")
     parser.add_argument(

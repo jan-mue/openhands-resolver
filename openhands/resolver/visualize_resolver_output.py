@@ -1,3 +1,5 @@
+"""Command-line helper for inspecting resolver output."""
+
 import argparse
 import os
 
@@ -5,6 +7,7 @@ from openhands.resolver.io_utils import load_single_resolver_output
 
 
 def visualize_resolver_output(issue_number: int, output_dir: str, vis_method: str) -> None:
+    """Print a resolver result using the requested visualization method."""
     output_jsonl = os.path.join(output_dir, "output.jsonl")
     resolver_output = load_single_resolver_output(output_jsonl, issue_number)
     if vis_method == "json":

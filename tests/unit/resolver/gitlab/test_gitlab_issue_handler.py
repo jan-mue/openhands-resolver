@@ -2,14 +2,11 @@ from unittest.mock import MagicMock, patch
 
 from openhands.resolver.interfaces.gitlab import GitlabIssueHandler, GitlabPRHandler
 from openhands.resolver.interfaces.issue import ReviewThread
-from openhands.resolver.interfaces.issue_definitions import (
-    ServiceContextIssue,
-    ServiceContextPR,
-)
+from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue, ServiceContextPR
 from tests.unit.resolver.compat import LLMConfig
 
 
-def test_get_converted_issues_initializes_review_comments():
+def test_get_converted_issues_initializes_review_comments() -> None:
     # Mock the necessary dependencies
     with patch("httpx.get") as mock_get:
         # Mock the response for issues
@@ -48,7 +45,7 @@ def test_get_converted_issues_initializes_review_comments():
         assert issues[0].repo == "test-repo"
 
 
-def test_get_converted_issues_handles_empty_body():
+def test_get_converted_issues_handles_empty_body() -> None:
     # Mock the necessary dependencies
     with patch("httpx.get") as mock_get:
         # Mock the response for issues
@@ -87,7 +84,7 @@ def test_get_converted_issues_handles_empty_body():
         assert issues[0].review_comments is None
 
 
-def test_pr_handler_get_converted_issues_with_comments():
+def test_pr_handler_get_converted_issues_with_comments() -> None:
     # Mock the necessary dependencies
     with patch("httpx.get") as mock_get:
         # Mock the response for PRs
@@ -167,7 +164,7 @@ def test_pr_handler_get_converted_issues_with_comments():
             assert prs[0].closing_issues == ["This is additional context from an externally referenced issue."]
 
 
-def test_get_issue_comments_with_specific_comment_id():
+def test_get_issue_comments_with_specific_comment_id() -> None:
     # Mock the necessary dependencies
     with patch("httpx.get") as mock_get:
         # Mock the response for comments
@@ -190,7 +187,7 @@ def test_get_issue_comments_with_specific_comment_id():
         assert specific_comment == ["First comment"]
 
 
-def test_pr_handler_get_converted_issues_with_specific_thread_comment():
+def test_pr_handler_get_converted_issues_with_specific_thread_comment() -> None:
     # Define the specific comment_id to filter
     specific_comment_id = 123
 
@@ -295,7 +292,7 @@ def test_pr_handler_get_converted_issues_with_specific_thread_comment():
             assert prs[0].head_branch == "test-branch"
 
 
-def test_pr_handler_get_converted_issues_with_specific_review_thread_comment():
+def test_pr_handler_get_converted_issues_with_specific_review_thread_comment() -> None:
     # Define the specific comment_id to filter
     specific_comment_id = 123
 
@@ -417,7 +414,7 @@ def test_pr_handler_get_converted_issues_with_specific_review_thread_comment():
             assert prs[0].head_branch == "test-branch"
 
 
-def test_pr_handler_get_converted_issues_with_specific_comment_and_issue_refs():
+def test_pr_handler_get_converted_issues_with_specific_comment_and_issue_refs() -> None:
     # Define the specific comment_id to filter
     specific_comment_id = 123
 
@@ -552,7 +549,7 @@ def test_pr_handler_get_converted_issues_with_specific_comment_and_issue_refs():
             assert prs[0].head_branch == "test-branch"
 
 
-def test_pr_handler_get_converted_issues_with_duplicate_issue_refs():
+def test_pr_handler_get_converted_issues_with_duplicate_issue_refs() -> None:
     # Mock the necessary dependencies
     with patch("httpx.get") as mock_get:
         # Mock the response for PRs

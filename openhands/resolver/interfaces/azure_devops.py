@@ -1,24 +1,16 @@
 import base64
 import re
-from typing import Any
+from typing import Any, override
 
 import httpx
 
-from openhands.resolver.interfaces.issue import (
-    Issue,
-    IssueHandlerInterface,
-    ReviewThread,
-)
+from openhands.resolver.interfaces.issue import Issue, IssueHandlerInterface, ReviewThread
+
+OWNER_PARTS = 2
 
 
 class AzureDevOpsIssueHandler(IssueHandlerInterface):
-    def __init__(
-        self,
-        token: str,
-        organization: str,
-        project: str,
-        repository: str,
-    ):
+    def __init__(self, token: str, organization: str, project: str, repository: str) -> None:
         self.token = token
         self.organization = organization
         self.project = project
@@ -29,17 +21,19 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         self.work_items_api_url = f"{self.base_api_url}/with"
         self.default_branch = "main"
 
+    @override
     def set_owner(self, owner: str) -> None:
         """Set the owner of the repository."""
         self.owner = owner
         parts = owner.split("/")
-        if len(parts) >= 2:
+        if len(parts) >= OWNER_PARTS:
             self.organization = parts[0]
             self.project = parts[1]
             self.base_api_url = f"https://dev.azure.com/{self.organization}/{self.project}/_apis"
             self.repo_api_url = f"{self.base_api_url}/git/repositories/{self.repository}"
             self.work_items_api_url = f"{self.base_api_url}/with"
 
+    @override
     def get_headers(self) -> dict[str, str]:
         """Get the headers for the Azure DevOps API."""
         auth_str = base64.b64encode(f":{self.token}".encode()).decode()
@@ -49,6 +43,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
             "Accept": "application/json",
         }
 
+    @override
     def download_issues(self) -> list[Any]:
         """Download issues from Azure DevOps."""
         # Use WIQL to query for active work items
@@ -75,6 +70,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
 
         return work_items
 
+    @override
     def get_issue_comments(self, issue_number: int, comment_id: int | None = None) -> list[str] | None:
         """Get comments for an issue."""
         comments_url = f"{self.work_items_api_url}/workitems/{issue_number}/comments?api-version=7.1-preview.3"
@@ -94,38 +90,47 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         # Return all comments
         return [comment.get("text", "") for comment in comments_data]
 
+    @override
     def get_base_url(self) -> str:
         """Get the base URL for the Azure DevOps repository."""
         return f"https://dev.azure.com/{self.organization}/{self.project}"
 
+    @override
     def get_branch_url(self, branch_name: str) -> str:
         """Get the URL for a branch."""
         return f"{self.get_base_url()}/_git/{self.repository}?version=GB{branch_name}"
 
+    @override
     def get_download_url(self) -> str:
         """Get the download URL for the repository."""
         return f"{self.get_base_url()}/_git/{self.repository}"
 
+    @override
     def get_clone_url(self) -> str:
         """Get the clone URL for the repository."""
         return f"https://dev.azure.com/{self.organization}/{self.project}/_git/{self.repository}"
 
+    @override
     def get_pull_url(self, pr_number: int) -> str:
         """Get the URL for a pull request."""
         return f"{self.get_base_url()}/_git/{self.repository}/pullrequest/{pr_number}"
 
+    @override
     def get_graphql_url(self) -> str:
         """Get the GraphQL URL for Azure DevOps."""
         return f"https://dev.azure.com/{self.organization}/_apis/graphql?api-version=7.1-preview.1"
 
+    @override
     def get_compare_url(self, branch_name: str) -> str:
         """Get the URL to compare branches."""
         return f"{self.get_base_url()}/_git/{self.repository}/branches?baseVersion=GB{self.default_branch}&targetVersion=GB{branch_name}&_a=files"
 
+    @override
     def get_branch_name(self, base_branch_name: str) -> str:
         """Generate a branch name for a new pull request."""
         return f"openhands/issue-{base_branch_name}"
 
+    @override
     def get_default_branch_name(self) -> str:
         """Get the default branch name for the repository."""
         # Get repository details to find the default branch
@@ -138,6 +143,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         # Remove 'refs/heads/' prefix
         return default_branch.replace("refs/heads/", "")
 
+    @override
     def branch_exists(self, branch_name: str) -> bool:
         """Check if a branch exists."""
         # List all branches and check if the branch exists
@@ -150,6 +156,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         refs = response.json().get("value", [])
         return len(refs) > 0
 
+    @override
     def reply_to_comment(self, pr_number: int, comment_id: str, reply: str) -> None:
         """Reply to a comment on a pull request."""
         # Get the thread ID from the comment ID
@@ -183,6 +190,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         response = httpx.post(comment_url, headers=self.get_headers(), json=comment_data)
         response.raise_for_status()
 
+    @override
     def send_comment_msg(self, issue_number: int, msg: str) -> None:
         """Send a comment to an issue."""
         comment_url = f"{self.work_items_api_url}/workitems/{issue_number}/comments?api-version=7.1-preview.3"
@@ -194,10 +202,12 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         response = httpx.post(comment_url, headers=self.get_headers(), json=comment_data)
         response.raise_for_status()
 
+    @override
     def get_authorize_url(self) -> str:
         """Get the authorization URL for Azure DevOps."""
         return "https://app.vsaex.visualstudio.com/app/register"
 
+    @override
     def create_pull_request(self, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Create a pull request."""
         if data is None:
@@ -230,6 +240,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
             "url": pr_response.get("url"),
         }
 
+    @override
     def request_reviewers(self, reviewer: str, pr_number: int) -> None:
         """Request reviewers for a pull request."""
         # Get the reviewer's ID
@@ -259,6 +270,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
         response = httpx.put(reviewers_url, headers=self.get_headers(), json=reviewer_data)
         response.raise_for_status()
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -291,6 +303,7 @@ class AzureDevOpsIssueHandler(IssueHandlerInterface):
 
         return context
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:

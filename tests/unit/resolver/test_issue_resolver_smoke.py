@@ -4,12 +4,7 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from openhands.sdk import (
-    LLM,
-    AgentContext,
-    Conversation,
-    LocalWorkspace,
-)
+from openhands.sdk import LLM, AgentContext, Conversation, LocalWorkspace
 from openhands.tools.preset.default import get_default_agent
 
 

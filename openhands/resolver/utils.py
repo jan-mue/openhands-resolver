@@ -1,4 +1,8 @@
+"""Shared utilities for the resolver."""
+
 import asyncio
+import base64
+import concurrent.futures
 import logging
 import multiprocessing as mp
 import os
@@ -14,6 +18,8 @@ from openhands.sdk import get_logger
 logger = get_logger(__name__)
 
 GENERAL_TIMEOUT = 60
+HTTP_OK = 200
+PASSWD_UID_INDEX = 2
 
 
 def httpx_verify_option() -> bool:
@@ -23,10 +29,7 @@ def httpx_verify_option() -> bool:
 
 
 def call_async_from_sync[T](
-    async_fn: Callable[..., Awaitable[T]],
-    timeout: float,
-    *args,
-    **kwargs,
+    async_fn: Callable[..., Awaitable[T]], timeout: float, *args: object, **kwargs: object
 ) -> T:
     """Run ``async_fn`` from synchronous code, even when a loop is running."""
 
@@ -37,8 +40,6 @@ def call_async_from_sync[T](
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(_run())
-
-    import concurrent.futures
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         return cast(T, executor.submit(asyncio.run, _run()).result())
@@ -53,7 +54,7 @@ async def _check_http_token(
         response = await client.get(url, headers=headers)
     except httpx.HTTPError:
         return False
-    return response.status_code == 200
+    return response.status_code == HTTP_OK
 
 
 async def identify_token(token: str, base_domain: str | None) -> ProviderType:
@@ -118,8 +119,6 @@ async def identify_token(token: str, base_domain: str | None) -> ProviderType:
         )
 
     if not custom or base_domain in {None, "dev.azure.com"}:
-        import base64
-
         azure_auth = base64.b64encode(f":{token}".encode()).decode()
         candidates.append(
             (
@@ -130,8 +129,6 @@ async def identify_token(token: str, base_domain: str | None) -> ProviderType:
         )
 
     if base_url:
-        import base64
-
         basic_auth = base64.b64encode(token.encode() if ":" in token else f"x-token:{token}".encode()).decode()
         candidates.extend(
             [
@@ -171,6 +168,7 @@ async def identify_token(token: str, base_domain: str | None) -> ProviderType:
 
 
 def cleanup() -> None:
+    """Terminate child processes left behind by the resolver."""
     logger.info("Cleaning up child processes...")
     for process in mp.active_children():
         logger.info(f"Terminating child process: {process.name}")
@@ -200,12 +198,14 @@ def reset_logger_for_multiprocessing(logger: logging.Logger, instance_id: str, l
 
 
 def extract_image_urls(issue_body: str) -> list[str]:
+    """Extract image URLs from Markdown image tags in an issue body."""
     # Regular expression to match Markdown image syntax ![alt text](image_url)
     image_pattern = r"!\[.*?\]\((https?://[^\s)]+)\)"
     return re.findall(image_pattern, issue_body)
 
 
 def extract_issue_references(body: str) -> list[int]:
+    """Extract issue numbers referenced from an issue body."""
     # First, remove code blocks as they may contain false positives
     body = re.sub(r"```.*?```", "", body, flags=re.DOTALL)
 
@@ -220,13 +220,14 @@ def extract_issue_references(body: str) -> list[int]:
 
 
 def get_unique_uid(start_uid: int = 1000) -> int:
+    """Return an unused UID starting from ``start_uid``."""
     existing_uids = set()
     with open("/etc/passwd") as passwd_file:
         for line in passwd_file:
             parts = line.split(":")
-            if len(parts) > 2:
+            if len(parts) > PASSWD_UID_INDEX:
                 try:
-                    existing_uids.add(int(parts[2]))
+                    existing_uids.add(int(parts[PASSWD_UID_INDEX]))
                 except ValueError:
                     continue
 

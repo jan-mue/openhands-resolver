@@ -10,14 +10,13 @@ from tests.unit.resolver.compat import LLM, LLMConfig, MessageAction, message_te
 
 
 @pytest.fixture
-def pr_handler():
+def pr_handler() -> object:
     llm_config = LLMConfig(model="test-model")
-    handler = ServiceContextPR(GithubPRHandler("test-owner", "test-repo", "test-token"), llm_config)
-    return handler
+    return ServiceContextPR(GithubPRHandler("test-owner", "test-repo", "test-token"), llm_config)
 
 
 @pytest.fixture
-def mock_llm_success_response():
+def mock_llm_success_response() -> object:
     return MagicMock(
         choices=[
             MagicMock(
@@ -33,7 +32,7 @@ The changes look good"""
     )
 
 
-def test_guess_success_review_threads_litellm_call():
+def test_guess_success_review_threads_litellm_call() -> None:
     """Test that the completion() call for review threads contains the expected content."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -93,7 +92,7 @@ The changes successfully address the feedback."""
     # Test the guess_success method
     with patch.object(LLM, "completion") as mock_completion:
         mock_completion.return_value = mock_response
-        success, success_list, explanation = handler.guess_success(issue, history)
+        _success, _success_list, explanation = handler.guess_success(issue, history)
 
         # Verify the completion() calls
         assert mock_completion.call_count == 2  # One call per review thread
@@ -123,7 +122,7 @@ The changes successfully address the feedback."""
         assert len(json.loads(explanation)) == 2
 
 
-def test_guess_success_thread_comments_litellm_call():
+def test_guess_success_thread_comments_litellm_call() -> None:
     """Test that the completion() call for thread comments contains the expected content."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -177,7 +176,7 @@ The changes successfully address the feedback."""
     # Test the guess_success method
     with patch.object(LLM, "completion") as mock_completion:
         mock_completion.return_value = mock_response
-        success, success_list, explanation = handler.guess_success(issue, history)
+        _success, _success_list, explanation = handler.guess_success(issue, history)
 
         # Verify the completion() call
         mock_completion.assert_called_once()
@@ -192,7 +191,7 @@ The changes successfully address the feedback."""
         assert len(json.loads(explanation)) == 1
 
 
-def test_check_feedback_with_llm():
+def test_check_feedback_with_llm() -> None:
     """Test the _check_feedback_with_llm helper function."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -232,7 +231,7 @@ def test_check_feedback_with_llm():
             assert (success, explanation) == case["expected"]
 
 
-def test_check_review_thread_with_git_patch():
+def test_check_review_thread_with_git_patch() -> None:
     """Test that git patch from complete_runtime is included in the prompt."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -283,7 +282,7 @@ Changes look good"""
         assert explanation == "Changes look good"
 
 
-def test_check_review_thread():
+def test_check_review_thread() -> None:
     """Test the _check_review_thread helper function."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -332,7 +331,7 @@ Changes look good"""
         assert explanation == "Changes look good"
 
 
-def test_check_thread_comments_with_git_patch():
+def test_check_thread_comments_with_git_patch() -> None:
     """Test that git patch from complete_runtime is included in the prompt."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -383,7 +382,7 @@ Changes look good"""
         assert explanation == "Changes look good"
 
 
-def test_check_thread_comments():
+def test_check_thread_comments() -> None:
     """Test the _check_thread_comments helper function."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -432,7 +431,7 @@ Changes look good"""
         assert explanation == "Changes look good"
 
 
-def test_check_review_comments_with_git_patch():
+def test_check_review_comments_with_git_patch() -> None:
     """Test that git patch from complete_runtime is included in the prompt."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -483,7 +482,7 @@ Changes look good"""
         assert explanation == "Changes look good"
 
 
-def test_check_review_comments():
+def test_check_review_comments() -> None:
     """Test the _check_review_comments helper function."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -532,7 +531,7 @@ Changes look good"""
         assert explanation == "Changes look good"
 
 
-def test_guess_success_review_comments_litellm_call():
+def test_guess_success_review_comments_litellm_call() -> None:
     """Test that the completion() call for review comments contains the expected content."""
     # Create a PR handler instance
     llm_config = LLMConfig(model="test", api_key="test")
@@ -582,7 +581,7 @@ The changes successfully address the feedback."""
 
     with patch.object(LLM, "completion") as mock_completion:
         mock_completion.return_value = mock_response
-        success, success_list, explanation = handler.guess_success(issue, history)
+        _success, _success_list, explanation = handler.guess_success(issue, history)
 
         # Verify the completion() call
         mock_completion.assert_called_once()

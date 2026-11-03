@@ -1,12 +1,9 @@
-from typing import Any
+from http import HTTPStatus
+from typing import Any, override
 
 import httpx
 
-from openhands.resolver.interfaces.issue import (
-    Issue,
-    IssueHandlerInterface,
-    ReviewThread,
-)
+from openhands.resolver.interfaces.issue import Issue, IssueHandlerInterface, ReviewThread
 from openhands.resolver.utils import extract_issue_references
 from openhands.sdk import get_logger
 
@@ -21,7 +18,7 @@ class GithubIssueHandler(IssueHandlerInterface):
         token: str,
         username: str | None = None,
         base_domain: str = "github.com",
-    ):
+    ) -> None:
         """Initialize a GitHub issue handler.
 
         Args:
@@ -41,43 +38,51 @@ class GithubIssueHandler(IssueHandlerInterface):
         self.clone_url = self.get_clone_url()
         self.headers = self.get_headers()
 
+    @override
     def set_owner(self, owner: str) -> None:
         self.owner = owner
 
+    @override
     def get_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"token {self.token}",
             "Accept": "application/vnd.github.v3+json",
         }
 
+    @override
     def get_base_url(self) -> str:
         if self.base_domain == "github.com":
             return f"https://api.github.com/repos/{self.owner}/{self.repo}"
-        else:
-            return f"https://{self.base_domain}/api/v3/repos/{self.owner}/{self.repo}"
+        return f"https://{self.base_domain}/api/v3/repos/{self.owner}/{self.repo}"
 
+    @override
     def get_authorize_url(self) -> str:
         return f"https://{self.username}:{self.token}@{self.base_domain}/"
 
+    @override
     def get_branch_url(self, branch_name: str) -> str:
         return self.get_base_url() + f"/branches/{branch_name}"
 
+    @override
     def get_download_url(self) -> str:
         return f"{self.base_url}/issues"
 
+    @override
     def get_clone_url(self) -> str:
         username_and_token = f"{self.username}:{self.token}" if self.username else f"x-auth-token:{self.token}"
         return f"https://{username_and_token}@{self.base_domain}/{self.owner}/{self.repo}.git"
 
+    @override
     def get_graphql_url(self) -> str:
         if self.base_domain == "github.com":
             return "https://api.github.com/graphql"
-        else:
-            return f"https://{self.base_domain}/api/graphql"
+        return f"https://{self.base_domain}/api/graphql"
 
+    @override
     def get_compare_url(self, branch_name: str) -> str:
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/compare/{branch_name}?expand=1"
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:
@@ -128,6 +133,7 @@ class GithubIssueHandler(IssueHandlerInterface):
 
         return converted_issues
 
+    @override
     def download_issues(self) -> list[Any]:
         params: dict[str, int | str] = {"state": "open", "per_page": 100, "page": 1}
         all_issues = []
@@ -144,11 +150,13 @@ class GithubIssueHandler(IssueHandlerInterface):
                 raise ValueError("Expected list of dictionaries from Service Github API.")
 
             all_issues.extend(issues)
-            assert isinstance(params["page"], int)
+            if not isinstance(params["page"], int):
+                raise TypeError("Expected integer page number")
             params["page"] += 1
 
         return all_issues
 
+    @override
     def get_issue_comments(self, issue_number: int, comment_id: int | None = None) -> list[str] | None:
         """Download comments for a specific issue from Github."""
         url = f"{self.download_url}/{issue_number}/comments"
@@ -177,13 +185,15 @@ class GithubIssueHandler(IssueHandlerInterface):
 
         return all_comments if all_comments else None
 
+    @override
     def branch_exists(self, branch_name: str) -> bool:
         logger.info(f"Checking if branch {branch_name} exists...")
         response = httpx.get(f"{self.base_url}/branches/{branch_name}", headers=self.headers)
-        exists = response.status_code == 200
+        exists = response.status_code == HTTPStatus.OK
         logger.info(f"Branch {branch_name} exists: {exists}")
         return exists
 
+    @override
     def get_branch_name(self, base_branch_name: str) -> str:
         branch_name = base_branch_name
         attempt = 1
@@ -192,6 +202,7 @@ class GithubIssueHandler(IssueHandlerInterface):
             branch_name = f"{base_branch_name}-try{attempt}"
         return branch_name
 
+    @override
     def reply_to_comment(self, pr_number: int, comment_id: str, reply: str) -> None:
         # Opting for graphql as REST API doesn't allow reply to replies in comment threads
         query = """
@@ -217,20 +228,23 @@ class GithubIssueHandler(IssueHandlerInterface):
         response = httpx.post(url, json={"query": query, "variables": variables}, headers=headers)
         response.raise_for_status()
 
+    @override
     def get_pull_url(self, pr_number: int) -> str:
         return f"https://{self.base_domain}/{self.owner}/{self.repo}/pull/{pr_number}"
 
+    @override
     def get_default_branch_name(self) -> str:
         response = httpx.get(f"{self.base_url}", headers=self.headers)
         response.raise_for_status()
         data = response.json()
         return str(data["default_branch"])
 
+    @override
     def create_pull_request(self, data: dict[str, Any] | None = None) -> dict[str, Any]:
         if data is None:
             data = {}
         response = httpx.post(f"{self.base_url}/pulls", headers=self.headers, json=data)
-        if response.status_code == 403:
+        if response.status_code == HTTPStatus.FORBIDDEN:
             raise RuntimeError(
                 "Failed to create pull request due to missing permissions. "
                 "Make sure that the provided token has push permissions for the repository."
@@ -239,6 +253,7 @@ class GithubIssueHandler(IssueHandlerInterface):
         pr_data = response.json()
         return dict(pr_data)
 
+    @override
     def request_reviewers(self, reviewer: str, pr_number: int) -> None:
         review_data = {"reviewers": [reviewer]}
         review_response = httpx.post(
@@ -246,9 +261,10 @@ class GithubIssueHandler(IssueHandlerInterface):
             headers=self.headers,
             json=review_data,
         )
-        if review_response.status_code != 201:
+        if review_response.status_code != HTTPStatus.CREATED:
             logger.warning(f"Failed to request review from {reviewer}: {review_response.text}")
 
+    @override
     def send_comment_msg(self, issue_number: int, msg: str) -> None:
         """Send a comment message to a GitHub issue or pull request.
 
@@ -260,11 +276,12 @@ class GithubIssueHandler(IssueHandlerInterface):
         comment_url = f"{self.base_url}/issues/{issue_number}/comments"
         comment_data = {"body": msg}
         comment_response = httpx.post(comment_url, headers=self.headers, json=comment_data)
-        if comment_response.status_code != 201:
+        if comment_response.status_code != HTTPStatus.CREATED:
             logger.error(f"Failed to post comment: {comment_response.status_code} {comment_response.text}")
         else:
             logger.info(f"Comment added to the PR: {msg}")
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -285,7 +302,7 @@ class GithubPRHandler(GithubIssueHandler):
         token: str,
         username: str | None = None,
         base_domain: str = "github.com",
-    ):
+    ) -> None:
         """Initialize a GitHub PR handler.
 
         Args:
@@ -396,7 +413,7 @@ class GithubPRHandler(GithubIssueHandler):
         for thread in raw_review_threads:
             node = thread.get("node", {})
             if not node.get("isResolved", True):  # Check if the review thread is unresolved
-                id = node.get("id")
+                thread_id = node.get("id")
                 thread_contains_comment_id = False
                 my_review_threads = node.get("comments", {}).get("nodes", [])
                 message = ""
@@ -419,7 +436,7 @@ class GithubPRHandler(GithubIssueHandler):
                 if comment_id is None or thread_contains_comment_id:
                     unresolved_thread = ReviewThread(comment=message, files=files)
                     review_threads.append(unresolved_thread)
-                    thread_ids.append(id)
+                    thread_ids.append(thread_id)
 
         return (
             closing_issues_bodies,
@@ -465,6 +482,7 @@ class GithubPRHandler(GithubIssueHandler):
 
         return all_comments if all_comments else None
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -515,6 +533,7 @@ class GithubPRHandler(GithubIssueHandler):
 
         return closing_issues
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:

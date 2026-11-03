@@ -1,3 +1,5 @@
+"""Provider identifiers used by the resolver."""
+
 from enum import StrEnum
 
 

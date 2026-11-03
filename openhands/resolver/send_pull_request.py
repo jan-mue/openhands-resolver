@@ -1,3 +1,5 @@
+"""Send resolver patches as pull requests or branch updates."""
+
 import argparse
 import json
 import os
@@ -15,17 +17,11 @@ from openhands.resolver.interfaces.github import GithubIssueHandler
 from openhands.resolver.interfaces.gitlab import GitlabIssueHandler
 from openhands.resolver.interfaces.issue import Issue
 from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue
-from openhands.resolver.io_utils import (
-    load_single_resolver_output,
-)
+from openhands.resolver.io_utils import load_single_resolver_output
 from openhands.resolver.patching import apply_diff, parse_patch
 from openhands.resolver.provider import ProviderType
 from openhands.resolver.resolver_output import ResolverOutput
-from openhands.resolver.utils import (
-    GENERAL_TIMEOUT,
-    call_async_from_sync,
-    identify_token,
-)
+from openhands.resolver.utils import GENERAL_TIMEOUT, call_async_from_sync, identify_token
 from openhands.sdk import LLM, Message, TextContent, get_logger
 from openhands.sdk.llm import content_to_str
 
@@ -57,8 +53,7 @@ def apply_patch(repo_dir: str, patch: str) -> None:
 
         # Check if the file is being deleted
         if diff.header.new_path == "/dev/null":
-            assert old_path is not None
-            if os.path.exists(old_path):
+            if old_path is not None and os.path.exists(old_path):
                 os.remove(old_path)
                 logger.info(f"Deleted file: {old_path}")
             continue
@@ -150,10 +145,10 @@ def initialize_repo(output_dir: str, issue_number: int, issue_type: str, base_co
     # Checkout the base commit if provided
     if base_commit:
         result = subprocess.run(
-            f"git -C {dest_dir} checkout {base_commit}",
-            shell=True,
+            ["git", "-C", dest_dir, "checkout", base_commit],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode != 0:
             logger.info(f"Error checking out commit: {result.stderr}")
@@ -180,35 +175,45 @@ def make_commit(
     """
     # Check if git username is set
     result = subprocess.run(
-        f"git -C {repo_dir} config user.name",
-        shell=True,
+        ["git", "-C", repo_dir, "config", "user.name"],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     if not result.stdout.strip():
         # If username is not set, configure git with the provided credentials
         subprocess.run(
-            f'git -C {repo_dir} config user.name "{git_user_name}" && '
-            f'git -C {repo_dir} config user.email "{git_user_email}" && '
-            f'git -C {repo_dir} config alias.git "git --no-pager"',
-            shell=True,
+            ["git", "-C", repo_dir, "config", "user.name", git_user_name],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_dir, "config", "user.email", git_user_email],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_dir, "config", "alias.git", "git --no-pager"],
             check=True,
         )
         logger.info(f"Git user configured as {git_user_name} <{git_user_email}>")
 
     # Add all changes to the git index
-    result = subprocess.run(f"git -C {repo_dir} add .", shell=True, capture_output=True, text=True)
+    result = subprocess.run(
+        ["git", "-C", repo_dir, "add", "."],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if result.returncode != 0:
         logger.error(f"Error adding files: {result.stderr}")
         raise RuntimeError("Failed to add files to git")
 
     # Check the status of the git index
     status_result = subprocess.run(
-        f"git -C {repo_dir} status --porcelain",
-        shell=True,
+        ["git", "-C", repo_dir, "status", "--porcelain"],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     # If there are no changes, raise an error
@@ -224,6 +229,7 @@ def make_commit(
         ["git", "-C", repo_dir, "commit", "-m", commit_message],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to commit changes: {result}")
@@ -263,6 +269,7 @@ def send_pull_request(
         git_user_name: Git username to configure when creating commits
         git_user_email: Git email to configure when creating commits
     """
+    del git_user_email, git_user_name
     if pr_type not in ["branch", "draft", "ready"]:
         raise ValueError(f"Invalid pr_type: {pr_type}")
 
@@ -336,6 +343,7 @@ def send_pull_request(
         ["git", "-C", patch_dir, "checkout", "-b", branch_name],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         logger.error(f"Error creating new branch: {result.stderr}")
@@ -344,7 +352,7 @@ def send_pull_request(
     # Determine the repository to push to (original or fork)
     push_owner = fork_owner if fork_owner else issue.owner
 
-    handler._strategy.set_owner(push_owner)
+    handler.strategy.set_owner(push_owner)
 
     logger.info("Pushing changes...")
     push_url = handler.get_clone_url()
@@ -352,6 +360,7 @@ def send_pull_request(
         ["git", "-C", patch_dir, "push", push_url, branch_name],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         logger.error(f"Error pushing changes: {result.stderr}")
@@ -384,11 +393,7 @@ def send_pull_request(
                 "base": base_branch,
                 "draft": pr_type == "draft",
             }
-        elif (
-            platform == ProviderType.GITLAB
-            or platform == ProviderType.BITBUCKET
-            or platform == ProviderType.BITBUCKET_DATA_CENTER
-        ):
+        elif platform in (ProviderType.GITLAB, ProviderType.BITBUCKET, ProviderType.BITBUCKET_DATA_CENTER):
             data = {
                 "title": final_pr_title,
                 "description": pr_body,
@@ -494,12 +499,17 @@ def update_existing_pull_request(
         raise ValueError(f"Unsupported platform: {platform}")
 
     branch_name = issue.head_branch
-
-    # Prepare the push command
-    push_command = f"git -C {patch_dir} push {handler.get_authorize_url()}{issue.owner}/{issue.repo}.git {branch_name}"
+    if not branch_name:
+        raise ValueError("Branch name cannot be None")
 
     # Push the changes to the existing branch
-    result = subprocess.run(push_command, shell=True, capture_output=True, text=True)
+    push_url = f"{handler.get_authorize_url()}{issue.owner}/{issue.repo}.git"
+    result = subprocess.run(
+        ["git", "-C", patch_dir, "push", push_url, branch_name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if result.returncode != 0:
         logger.error(f"Error pushing changes: {result.stderr}")
         raise RuntimeError("Failed to push changes to the remote repository")
@@ -572,6 +582,7 @@ def process_single_issue(
     git_user_name: str = "openhands",
     git_user_email: str = "openhands@all-hands.dev",
 ) -> None:
+    """Send one resolver result as a pull request or branch update."""
     # Determine default base_domain based on platform
     if base_domain is None:
         base_domain = (
@@ -651,6 +662,7 @@ def process_single_issue(
 
 
 def main() -> None:
+    """Run the pull-request sender from command-line arguments."""
     parser = argparse.ArgumentParser(description="Send a pull request to Github, Gitlab, or Azure DevOps.")
     parser.add_argument(
         "--selected-repo",

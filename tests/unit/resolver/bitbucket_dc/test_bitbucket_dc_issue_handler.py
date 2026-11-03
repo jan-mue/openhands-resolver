@@ -1,24 +1,19 @@
 import base64
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
-from openhands.resolver.interfaces.bitbucket_data_center import (
-    BitbucketDCIssueHandler,
-    BitbucketDCPRHandler,
-)
-from openhands.resolver.interfaces.issue_definitions import (
-    ServiceContextIssue,
-    ServiceContextPR,
-)
+from openhands.resolver.interfaces.bitbucket_data_center import BitbucketDCIssueHandler, BitbucketDCPRHandler
+from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue, ServiceContextPR
 from openhands.resolver.issue_handler_factory import IssueHandlerFactory
 from openhands.resolver.provider import ProviderType
 from tests.unit.resolver.compat import LLMConfig
 
 
 @pytest.fixture
-def handler():
+def handler() -> object:
     return BitbucketDCIssueHandler(
         owner="PROJ",
         repo="my-repo",
@@ -28,7 +23,7 @@ def handler():
 
 
 @pytest.fixture
-def llm_config():
+def llm_config() -> object:
     return LLMConfig(model="test-model", api_key=SecretStr("test-key"))
 
 
@@ -37,7 +32,7 @@ def llm_config():
 # ---------------------------------------------------------------------------
 
 
-def test_init_sets_correct_urls(handler):
+def test_init_sets_correct_urls(handler: BitbucketDCIssueHandler) -> None:
     assert handler.base_url == "https://bitbucket.example.com/rest/api/1.0"
     assert (
         handler.download_url
@@ -46,14 +41,14 @@ def test_init_sets_correct_urls(handler):
     assert handler.clone_url == "https://bitbucket.example.com/scm/proj/my-repo.git"
 
 
-def test_get_headers_returns_basic_auth(handler):
+def test_get_headers_returns_basic_auth(handler: BitbucketDCIssueHandler) -> None:
     expected = base64.b64encode(b"user:secret").decode()
     headers = handler.get_headers()
     assert headers["Authorization"] == f"Basic {expected}"
     assert headers["Accept"] == "application/json"
 
 
-def test_get_headers_bare_token_with_username():
+def test_get_headers_bare_token_with_username() -> None:
     h = BitbucketDCIssueHandler(
         owner="PROJ",
         repo="my-repo",
@@ -65,27 +60,27 @@ def test_get_headers_bare_token_with_username():
     assert h.headers["Authorization"] == f"Basic {expected}"
 
 
-def test_get_repo_url(handler):
+def test_get_repo_url(handler: BitbucketDCIssueHandler) -> None:
     assert handler.get_repo_url() == "https://bitbucket.example.com/projects/PROJ/repos/my-repo"
 
 
-def test_get_issue_url_returns_pr_url(handler):
+def test_get_issue_url_returns_pr_url(handler: BitbucketDCIssueHandler) -> None:
     assert handler.get_issue_url(42) == "https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/42"
 
 
-def test_get_branch_url(handler):
+def test_get_branch_url(handler: BitbucketDCIssueHandler) -> None:
     assert (
         handler.get_branch_url("feature/x")
         == "https://bitbucket.example.com/projects/PROJ/repos/my-repo/browse?at=refs/heads/feature/x"
     )
 
 
-def test_get_authorize_url_with_colon_token(handler):
+def test_get_authorize_url_with_colon_token(handler: BitbucketDCIssueHandler) -> None:
     url = handler.get_authorize_url()
     assert url == "https://user:secret@bitbucket.example.com/"
 
 
-def test_get_authorize_url_with_username_and_bare_token():
+def test_get_authorize_url_with_username_and_bare_token() -> None:
     h = BitbucketDCIssueHandler(
         owner="PROJ",
         repo="my-repo",
@@ -101,7 +96,7 @@ def test_get_authorize_url_with_username_and_bare_token():
 # ---------------------------------------------------------------------------
 
 
-def test_get_compare_url(handler):
+def test_get_compare_url(handler: BitbucketDCIssueHandler) -> None:
     with patch.object(handler, "get_default_branch_name", return_value="main"):
         url = handler.get_compare_url("feature/fix")
     assert url == (
@@ -115,7 +110,7 @@ def test_get_compare_url(handler):
 # ---------------------------------------------------------------------------
 
 
-async def test_get_issue_fetches_pr_endpoint(handler):
+async def test_get_issue_fetches_pr_endpoint(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "id": 7,
@@ -143,7 +138,7 @@ async def test_get_issue_fetches_pr_endpoint(handler):
     assert issue.base_branch == "main"
 
 
-def test_create_pr_uses_from_to_ref(handler):
+def test_create_pr_uses_from_to_ref(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "id": 3,
@@ -163,7 +158,7 @@ def test_create_pr_uses_from_to_ref(handler):
     assert url == "https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/3"
 
 
-def test_create_pull_request_returns_html_url_and_number(handler):
+def test_create_pull_request_returns_html_url_and_number(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "id": 5,
@@ -185,7 +180,7 @@ def test_create_pull_request_returns_html_url_and_number(handler):
     assert result["html_url"] == ("https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/5")
 
 
-def test_send_comment_msg_uses_text_field(handler):
+def test_send_comment_msg_uses_text_field(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
 
@@ -196,7 +191,7 @@ def test_send_comment_msg_uses_text_field(handler):
     assert kwargs["json"] == {"text": "Hello from OpenHands"}
 
 
-def test_reply_to_comment_posts_with_parent_id(handler):
+def test_reply_to_comment_posts_with_parent_id(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
 
@@ -208,7 +203,7 @@ def test_reply_to_comment_posts_with_parent_id(handler):
     assert kwargs["json"]["parent"] == {"id": 42}
 
 
-def test_branch_exists_true(handler):
+def test_branch_exists_true(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {"values": [{"displayId": "feature/fix", "id": "refs/heads/feature/fix"}]}
     mock_response.raise_for_status = MagicMock()
@@ -217,7 +212,7 @@ def test_branch_exists_true(handler):
         assert handler.branch_exists("feature/fix") is True
 
 
-def test_branch_exists_false(handler):
+def test_branch_exists_false(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {"values": []}
     mock_response.raise_for_status = MagicMock()
@@ -226,7 +221,7 @@ def test_branch_exists_false(handler):
         assert handler.branch_exists("nonexistent") is False
 
 
-def test_branch_exists_no_match(handler):
+def test_branch_exists_no_match(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     # filterText returns similar but not exact match
     mock_response.json.return_value = {"values": [{"displayId": "feature/fix-extended"}]}
@@ -236,7 +231,7 @@ def test_branch_exists_no_match(handler):
         assert handler.branch_exists("feature/fix") is False
 
 
-def test_get_default_branch_name_reads_display_id(handler):
+def test_get_default_branch_name_reads_display_id(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {"defaultBranch": {"displayId": "main", "id": "refs/heads/main"}}
     mock_response.raise_for_status = MagicMock()
@@ -245,7 +240,7 @@ def test_get_default_branch_name_reads_display_id(handler):
         assert handler.get_default_branch_name() == "main"
 
 
-def test_get_default_branch_name_strips_refs_heads_prefix(handler):
+def test_get_default_branch_name_strips_refs_heads_prefix(handler: BitbucketDCIssueHandler) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {"defaultBranch": {"displayId": "refs/heads/develop"}}
     mock_response.raise_for_status = MagicMock()
@@ -254,14 +249,12 @@ def test_get_default_branch_name_strips_refs_heads_prefix(handler):
         assert handler.get_default_branch_name() == "develop"
 
 
-def test_get_default_branch_name_fallback_to_master(handler):
-    import httpx as httpx_module
-
-    with patch("httpx.get", side_effect=httpx_module.HTTPError("connection refused")):
+def test_get_default_branch_name_fallback_to_master(handler: BitbucketDCIssueHandler) -> None:
+    with patch("httpx.get", side_effect=httpx.HTTPError("connection refused")):
         assert handler.get_default_branch_name() == "master"
 
 
-def test_get_context_returns_early(handler):
+def test_get_context_returns_early(handler: BitbucketDCIssueHandler) -> None:
     """get_context_from_external_issues_references should return closing_issues without API calls."""
     closing_issues = ["issue body 1"]
     with patch("httpx.get") as mock_get:
@@ -277,7 +270,7 @@ def test_get_context_returns_early(handler):
     assert result == ["issue body 1"]
 
 
-def test_download_issues_returns_empty(handler):
+def test_download_issues_returns_empty(handler: BitbucketDCIssueHandler) -> None:
     result = handler.download_issues()
     assert result == []
 
@@ -287,7 +280,7 @@ def test_download_issues_returns_empty(handler):
 # ---------------------------------------------------------------------------
 
 
-def test_factory_creates_dc_issue_handler(llm_config):
+def test_factory_creates_dc_issue_handler(llm_config: LLMConfig) -> None:
     factory = IssueHandlerFactory(
         owner="PROJ",
         repo="my-repo",
@@ -300,13 +293,13 @@ def test_factory_creates_dc_issue_handler(llm_config):
     )
     ctx = factory.create()
     assert isinstance(ctx, ServiceContextIssue)
-    assert isinstance(ctx._strategy, BitbucketDCIssueHandler)
-    assert ctx._strategy.owner == "PROJ"
-    assert ctx._strategy.repo == "my-repo"
-    assert ctx._strategy.base_domain == "bitbucket.example.com"
+    assert isinstance(ctx.strategy, BitbucketDCIssueHandler)
+    assert ctx.strategy.owner == "PROJ"
+    assert ctx.strategy.repo == "my-repo"
+    assert ctx.strategy.base_domain == "bitbucket.example.com"
 
 
-def test_factory_creates_dc_pr_handler(llm_config):
+def test_factory_creates_dc_pr_handler(llm_config: LLMConfig) -> None:
     factory = IssueHandlerFactory(
         owner="PROJ",
         repo="my-repo",
@@ -319,4 +312,4 @@ def test_factory_creates_dc_pr_handler(llm_config):
     )
     ctx = factory.create()
     assert isinstance(ctx, ServiceContextPR)
-    assert isinstance(ctx._strategy, BitbucketDCPRHandler)
+    assert isinstance(ctx.strategy, BitbucketDCPRHandler)

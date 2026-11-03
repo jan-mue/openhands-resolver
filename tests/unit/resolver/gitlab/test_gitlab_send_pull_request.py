@@ -26,7 +26,7 @@ from tests.unit.resolver.compat import LLMConfig
 
 
 @pytest.fixture
-def mock_output_dir():
+def mock_output_dir() -> object:
     with tempfile.TemporaryDirectory() as temp_dir:
         repo_path = os.path.join(temp_dir, "repo")
         # Initialize a Gitlab repo in "repo" and add a commit with "README.md"
@@ -41,7 +41,7 @@ def mock_output_dir():
 
 
 @pytest.fixture
-def mock_issue():
+def mock_issue() -> object:
     return Issue(
         number=42,
         title="Test Issue",
@@ -52,11 +52,11 @@ def mock_issue():
 
 
 @pytest.fixture
-def mock_llm_config():
+def mock_llm_config() -> object:
     return LLMConfig()
 
 
-def test_load_single_resolver_output():
+def test_load_single_resolver_output() -> None:
     mock_output_jsonl = "tests/unit/resolver/mock_output/output.jsonl"
 
     # Test loading an existing issue
@@ -68,11 +68,11 @@ def test_load_single_resolver_output():
     assert resolver_output.issue.repo == "pr-viewer"
 
     # Test loading a non-existent issue
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not found"):
         load_single_resolver_output(mock_output_jsonl, 999)
 
 
-def test_apply_patch(mock_output_dir):
+def test_apply_patch(mock_output_dir: str) -> None:
     # Create a sample file in the mock repo
     sample_file = os.path.join(mock_output_dir, "sample.txt")
     with open(sample_file, "w") as f:
@@ -100,7 +100,7 @@ index 9daeafb..b02def2 100644
     assert updated_content.strip() == "Updated content\nNew line".strip()
 
 
-def test_apply_patch_preserves_line_endings(mock_output_dir):
+def test_apply_patch_preserves_line_endings(mock_output_dir: str) -> None:
     # Create sample files with different line endings
     unix_file = os.path.join(mock_output_dir, "unix_style.txt")
     dos_file = os.path.join(mock_output_dir, "dos_style.txt")
@@ -154,7 +154,7 @@ index 9daeafb..b02def2 100644
     assert dos_content.decode("utf-8").split("\r\n")[1] == "Updated Line 2"
 
 
-def test_apply_patch_create_new_file(mock_output_dir):
+def test_apply_patch_create_new_file(mock_output_dir: str) -> None:
     # Create a patch that adds a new file
     patch_content = """
 diff --git a/new_file.txt b/new_file.txt
@@ -179,7 +179,7 @@ index 0000000..3b18e51
     assert content == "hello world", "File content is incorrect"
 
 
-def test_apply_patch_rename_file(mock_output_dir):
+def test_apply_patch_rename_file(mock_output_dir: str) -> None:
     # Create a sample file in the mock repo
     old_file = os.path.join(mock_output_dir, "old_name.txt")
     with open(old_file, "w") as f:
@@ -205,7 +205,7 @@ rename to new_name.txt"""
     assert content == "This file will be renamed"
 
 
-def test_apply_patch_delete_file(mock_output_dir):
+def test_apply_patch_delete_file(mock_output_dir: str) -> None:
     # Create a sample file in the mock repo
     sample_file = os.path.join(mock_output_dir, "to_be_deleted.txt")
     with open(sample_file, "w") as f:
@@ -229,12 +229,12 @@ index 9daeafb..0000000
     assert not os.path.exists(sample_file), "File was not deleted"
 
 
-def test_initialize_repo(mock_output_dir):
+def test_initialize_repo(mock_output_dir: str) -> None:
     issue_type = "issue"
     # Copy the repo to patches
-    ISSUE_NUMBER = 3
-    initialize_repo(mock_output_dir, ISSUE_NUMBER, issue_type)
-    patches_dir = os.path.join(mock_output_dir, "patches", f"issue_{ISSUE_NUMBER}")
+    issue_number = 3
+    initialize_repo(mock_output_dir, issue_number, issue_type)
+    patches_dir = os.path.join(mock_output_dir, "patches", f"issue_{issue_number}")
 
     # Check if files were copied correctly
     assert os.path.exists(os.path.join(patches_dir, "README.md"))
@@ -249,11 +249,11 @@ def test_initialize_repo(mock_output_dir):
 @patch("subprocess.run")
 @patch("openhands.resolver.send_pull_request.LLM")
 def test_update_existing_pull_request(
-    mock_llm_class,
-    mock_subprocess_run,
-    mock_requests_post,
-    mock_reply_to_comment,
-):
+    mock_llm_class: MagicMock,
+    mock_subprocess_run: MagicMock,
+    mock_requests_post: MagicMock,
+    mock_reply_to_comment: MagicMock,
+) -> None:
     # Arrange: Set up test data
     issue = Issue(
         owner="test-owner",
@@ -299,12 +299,19 @@ def test_update_existing_pull_request(
     )
 
     # Assert: Check if the git push command was executed
-    push_command = (
-        f"git -C {patch_dir} push "
-        f"https://{username}:{token}@gitlab.com/"
-        f"{issue.owner}/{issue.repo}.git {issue.head_branch}"
+    mock_subprocess_run.assert_called_once_with(
+        [
+            "git",
+            "-C",
+            patch_dir,
+            "push",
+            f"https://{username}:{token}@gitlab.com/{issue.owner}/{issue.repo}.git",
+            issue.head_branch,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    mock_subprocess_run.assert_called_once_with(push_command, shell=True, capture_output=True, text=True)
 
     # Assert: Check if the auto-generated comment was posted to the PR
     comment_url = f"https://gitlab.com/api/v4/projects/{quote(f'{issue.owner}/{issue.repo}', safe='')}/issues/{issue.number}/notes"
@@ -331,7 +338,7 @@ def test_update_existing_pull_request(
 
 
 @pytest.mark.parametrize(
-    "pr_type,target_branch,pr_title",
+    ("pr_type", "target_branch", "pr_title"),
     [
         ("branch", None, None),
         ("draft", None, None),
@@ -347,16 +354,15 @@ def test_update_existing_pull_request(
 @patch("httpx.post")
 @patch("httpx.get")
 def test_send_pull_request(
-    mock_get,
-    mock_post,
-    mock_run,
-    mock_issue,
-    mock_llm_config,
-    mock_output_dir,
-    pr_type,
-    target_branch,
-    pr_title,
-):
+    mock_get: MagicMock,
+    mock_post: MagicMock,
+    mock_run: MagicMock,
+    mock_issue: Issue,
+    mock_output_dir: str,
+    pr_type: str,
+    target_branch: str | None,
+    pr_title: str | None,
+) -> None:
     repo_path = os.path.join(mock_output_dir, "repo")
 
     # Mock API responses based on whether target_branch is specified
@@ -410,6 +416,7 @@ def test_send_pull_request(
         ["git", "-C", repo_path, "checkout", "-b", "openhands-fix-issue-42"],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert push_call == call(
         [
@@ -422,6 +429,7 @@ def test_send_pull_request(
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     # Check PR creation based on pr_type
@@ -445,14 +453,13 @@ def test_send_pull_request(
 @patch("httpx.put")
 @patch("httpx.get")
 def test_send_pull_request_with_reviewer(
-    mock_get,
-    mock_put,
-    mock_post,
-    mock_run,
-    mock_issue,
-    mock_output_dir,
-    mock_llm_config,
-):
+    mock_get: MagicMock,
+    mock_put: MagicMock,
+    mock_post: MagicMock,
+    mock_run: MagicMock,
+    mock_issue: Issue,
+    mock_output_dir: str,
+) -> None:
     repo_path = os.path.join(mock_output_dir, "repo")
     reviewer = "test-reviewer"
 
@@ -515,7 +522,7 @@ def test_send_pull_request_with_reviewer(
 
 
 @patch("httpx.get")
-def test_send_pull_request_invalid_target_branch(mock_get, mock_issue, mock_output_dir, mock_llm_config):
+def test_send_pull_request_invalid_target_branch(mock_get: MagicMock, mock_issue: Issue, mock_output_dir: str) -> None:
     """Test that an error is raised when specifying a non-existent target branch"""
     repo_path = os.path.join(mock_output_dir, "repo")
 
@@ -545,8 +552,12 @@ def test_send_pull_request_invalid_target_branch(mock_get, mock_issue, mock_outp
 @patch("httpx.post")
 @patch("httpx.get")
 def test_send_pull_request_git_push_failure(
-    mock_get, mock_post, mock_run, mock_issue, mock_output_dir, mock_llm_config
-):
+    mock_get: MagicMock,
+    mock_post: MagicMock,
+    mock_run: MagicMock,
+    mock_issue: Issue,
+    mock_output_dir: str,
+) -> None:
     repo_path = os.path.join(mock_output_dir, "repo")
 
     # Mock API responses
@@ -602,8 +613,12 @@ def test_send_pull_request_git_push_failure(
 @patch("httpx.post")
 @patch("httpx.get")
 def test_send_pull_request_permission_error(
-    mock_get, mock_post, mock_run, mock_issue, mock_output_dir, mock_llm_config
-):
+    mock_get: MagicMock,
+    mock_post: MagicMock,
+    mock_run: MagicMock,
+    mock_issue: Issue,
+    mock_output_dir: str,
+) -> None:
     repo_path = os.path.join(mock_output_dir, "repo")
 
     # Mock API responses
@@ -617,7 +632,7 @@ def test_send_pull_request_permission_error(
     ]
 
     # Test that RuntimeError is raised when PR creation fails due to permissions
-    with pytest.raises(RuntimeError, match="Failed to create pull request due to missing permissions."):
+    with pytest.raises(RuntimeError, match=r"Failed to create pull request due to missing permissions\."):
         send_pull_request(
             issue=mock_issue,
             token="test-token",
@@ -634,7 +649,7 @@ def test_send_pull_request_permission_error(
 
 @patch("httpx.post")
 @patch("httpx.get")
-def test_reply_to_comment(mock_get, mock_post, mock_issue):
+def test_reply_to_comment(mock_get: MagicMock, mock_post: MagicMock, mock_issue: Issue) -> None:
     # Arrange: set up the test data
     token = "test_token"
     comment_id = "GID/test_comment_id"
@@ -675,7 +690,7 @@ def test_reply_to_comment(mock_get, mock_post, mock_issue):
 
     # Check that the correct request was made to the API
     mock_post.assert_called_once_with(
-        f"https://gitlab.com/api/v4/projects/{quote(f'{mock_issue.owner}/{mock_issue.repo}', safe='')}/merge_requests/{mock_issue.number}/discussions/{comment_id.split('/')[-1]}/notes",
+        f"https://gitlab.com/api/v4/projects/{quote(f'{mock_issue.owner}/{mock_issue.repo}', safe='')}/merge_requests/{mock_issue.number}/discussions/{comment_id.rsplit('/', maxsplit=1)[-1]}/notes",
         headers={
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
@@ -692,13 +707,13 @@ def test_reply_to_comment(mock_get, mock_post, mock_issue):
 @patch("openhands.resolver.send_pull_request.update_existing_pull_request")
 @patch("openhands.resolver.send_pull_request.make_commit")
 def test_process_single_pr_update(
-    mock_make_commit,
-    mock_update_existing_pull_request,
-    mock_apply_patch,
-    mock_initialize_repo,
-    mock_output_dir,
-    mock_llm_config,
-):
+    mock_make_commit: MagicMock,
+    mock_update_existing_pull_request: MagicMock,
+    mock_apply_patch: MagicMock,
+    mock_initialize_repo: MagicMock,
+    mock_output_dir: str,
+    mock_llm_config: LLMConfig,
+) -> None:
     # Initialize test data
     token = "test_token"
     username = "test_user"
@@ -738,7 +753,7 @@ def test_process_single_pr_update(
         username,
         ProviderType.GITLAB,
         pr_type,
-        mock_llm_config,
+        cast(SDKLLM, mock_llm_config),
         None,
         False,
         None,
@@ -775,13 +790,12 @@ def test_process_single_pr_update(
 @patch("openhands.resolver.send_pull_request.send_pull_request")
 @patch("openhands.resolver.send_pull_request.make_commit")
 def test_process_single_issue(
-    mock_make_commit,
-    mock_send_pull_request,
-    mock_apply_patch,
-    mock_initialize_repo,
-    mock_output_dir,
-    mock_llm_config,
-):
+    mock_make_commit: MagicMock,
+    mock_send_pull_request: MagicMock,
+    mock_apply_patch: MagicMock,
+    mock_initialize_repo: MagicMock,
+    mock_output_dir: str,
+) -> None:
     # Initialize test data
     token = "test_token"
     username = "test_user"
@@ -820,7 +834,7 @@ def test_process_single_issue(
         username,
         platform,
         pr_type,
-        mock_llm_config,
+        None,
         None,
         False,
         None,
@@ -864,13 +878,12 @@ def test_process_single_issue(
 @patch("openhands.resolver.send_pull_request.send_pull_request")
 @patch("openhands.resolver.send_pull_request.make_commit")
 def test_process_single_issue_unsuccessful(
-    mock_make_commit,
-    mock_send_pull_request,
-    mock_apply_patch,
-    mock_initialize_repo,
-    mock_output_dir,
-    mock_llm_config,
-):
+    mock_make_commit: MagicMock,
+    mock_send_pull_request: MagicMock,
+    mock_apply_patch: MagicMock,
+    mock_initialize_repo: MagicMock,
+    mock_output_dir: str,
+) -> None:
     # Initialize test data
     token = "test_token"
     username = "test_user"
@@ -904,7 +917,7 @@ def test_process_single_issue_unsuccessful(
         username,
         ProviderType.GITLAB,
         pr_type,
-        mock_llm_config,
+        None,
         None,
         False,
         None,
@@ -924,7 +937,9 @@ def test_process_single_issue_unsuccessful(
 
 @patch("httpx.get")
 @patch("subprocess.run")
-def test_send_pull_request_branch_naming(mock_run, mock_get, mock_issue, mock_output_dir, mock_llm_config):
+def test_send_pull_request_branch_naming(
+    mock_run: MagicMock, mock_get: MagicMock, mock_issue: Issue, mock_output_dir: str
+) -> None:
     repo_path = os.path.join(mock_output_dir, "repo")
 
     # Mock API responses
@@ -963,6 +978,7 @@ def test_send_pull_request_branch_naming(mock_run, mock_get, mock_issue, mock_ou
         ["git", "-C", repo_path, "checkout", "-b", "openhands-fix-issue-42-try3"],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert push_call == call(
         [
@@ -975,6 +991,7 @@ def test_send_pull_request_branch_naming(mock_run, mock_get, mock_issue, mock_ou
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     # Check the result
@@ -988,13 +1005,13 @@ def test_send_pull_request_branch_naming(mock_run, mock_get, mock_issue, mock_ou
 @patch("os.path.exists")
 @patch("os.getenv")
 def test_main(
-    mock_getenv,
-    mock_path_exists,
-    mock_identify_token,
-    mock_load_single_resolver_output,
-    mock_process_single_issue,
-    mock_parser,
-):
+    mock_getenv: MagicMock,
+    mock_path_exists: MagicMock,
+    mock_identify_token: MagicMock,
+    mock_load_single_resolver_output: MagicMock,
+    mock_process_single_issue: MagicMock,
+    mock_parser: MagicMock,
+) -> None:
     # Setup mock parser
     mock_args = MagicMock()
     mock_args.token = None
@@ -1059,18 +1076,19 @@ def test_main(
 
     # Test for invalid issue number
     mock_args.issue_number = "invalid"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="is not a number"):
         main()
 
     # Test for invalid token
     mock_args.issue_number = "42"  # Reset to valid issue number
-    mock_getenv.side_effect = lambda key, default=None: None  # Return None for all env vars
+    mock_getenv.side_effect = None
+    mock_getenv.return_value = None
     with pytest.raises(ValueError, match="token is not set"):
         main()
 
 
 @patch("subprocess.run")
-def test_make_commit_escapes_issue_title(mock_subprocess_run):
+def test_make_commit_escapes_issue_title(mock_subprocess_run: MagicMock) -> None:
     # Setup
     repo_dir = "/path/to/repo"
     issue = Issue(
@@ -1106,7 +1124,7 @@ def test_make_commit_escapes_issue_title(mock_subprocess_run):
 
 
 @patch("subprocess.run")
-def test_make_commit_no_changes(mock_subprocess_run):
+def test_make_commit_no_changes(mock_subprocess_run: MagicMock) -> None:
     # Setup
     repo_dir = "/path/to/repo"
     issue = Issue(
@@ -1124,16 +1142,16 @@ def test_make_commit_no_changes(mock_subprocess_run):
         MagicMock(returncode=1, stdout=""),  # git status --porcelain (no changes)
     ]
 
-    with pytest.raises(RuntimeError, match="ERROR: Openhands failed to make code changes."):
+    with pytest.raises(RuntimeError, match=r"ERROR: Openhands failed to make code changes\."):
         make_commit(repo_dir, issue, "issue")
 
     # Check that subprocess.run was called for checking git status and add, but not commit
     assert mock_subprocess_run.call_count == 3
     git_status_call = mock_subprocess_run.call_args_list[2][0][0]
-    assert f"git -C {repo_dir} status --porcelain" in git_status_call
+    assert git_status_call == ["git", "-C", repo_dir, "status", "--porcelain"]
 
 
-def test_apply_patch_rename_directory(mock_output_dir):
+def test_apply_patch_rename_directory(mock_output_dir: str) -> None:
     # Create a sample directory structure
     old_dir = os.path.join(mock_output_dir, "prompts", "resolve")
     os.makedirs(old_dir)

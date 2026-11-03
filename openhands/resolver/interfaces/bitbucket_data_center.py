@@ -1,14 +1,11 @@
 import base64
-from typing import Any
+from typing import Any, override
 from urllib.parse import quote
 
 import httpx
+from pydantic import ValidationError
 
-from openhands.resolver.interfaces.issue import (
-    Issue,
-    IssueHandlerInterface,
-    ReviewThread,
-)
+from openhands.resolver.interfaces.issue import Issue, IssueHandlerInterface, ReviewThread
 from openhands.resolver.utils import (
     GENERAL_TIMEOUT,
     call_async_from_sync,
@@ -28,7 +25,7 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
         token: str,
         username: str | None = None,
         base_domain: str = "bitbucket.example.com",
-    ):
+    ) -> None:
         """Initialize a Bitbucket Data Center issue handler.
 
         Args:
@@ -48,9 +45,11 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
         self.clone_url = self.get_clone_url()
         self.headers = self.get_headers()
 
+    @override
     def set_owner(self, owner: str) -> None:
         self.owner = owner
 
+    @override
     def get_headers(self) -> dict[str, str]:
         # DC always uses HTTP Basic auth
         if ":" in self.token:
@@ -65,15 +64,18 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             "Accept": "application/json",
         }
 
+    @override
     def get_base_url(self) -> str:
         return f"https://{self.base_domain}/rest/api/1.0"
 
     def _get_repo_api_base(self) -> str:
         return f"{self.base_url}/projects/{self.owner}/repos/{self.repo}"
 
+    @override
     def get_download_url(self) -> str:
         return f"https://{self.base_domain}/rest/api/latest/projects/{self.owner}/repos/{self.repo}/archive?format=zip"
 
+    @override
     def get_clone_url(self) -> str:
         return f"https://{self.base_domain}/scm/{self.owner.lower()}/{self.repo}.git"
 
@@ -87,12 +89,15 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
     def get_pr_url(self, pr_number: int) -> str:
         return f"{self.get_repo_url()}/pull-requests/{pr_number}"
 
+    @override
     def get_pull_url(self, pr_number: int) -> str:
         return f"{self.get_repo_url()}/pull-requests/{pr_number}"
 
+    @override
     def get_branch_url(self, branch_name: str) -> str:
         return f"{self.get_repo_url()}/browse?at=refs/heads/{branch_name}"
 
+    @override
     def get_compare_url(self, branch_name: str) -> str:
         default_branch = self.get_default_branch_name()
         return (
@@ -101,6 +106,7 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             f"&targetBranch=refs/heads/{default_branch}"
         )
 
+    @override
     def get_authorize_url(self) -> str:
         if ":" in self.token:
             user, _, token = self.token.partition(":")
@@ -111,10 +117,12 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             creds = quote(self.token, safe="")
         return f"https://{creds}@{self.base_domain}/"
 
+    @override
     def get_graphql_url(self) -> str:
         # DC has no GraphQL API; return a placeholder
         return f"https://{self.base_domain}/rest/api/1.0"
 
+    @override
     def get_branch_name(self, base_branch_name: str) -> str:
         return f"{base_branch_name}-{self.owner}"
 
@@ -174,6 +182,7 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
         )
         return result.get("html_url", "")
 
+    @override
     def create_pull_request(self, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Create a pull request and return html_url and number.
 
@@ -222,12 +231,14 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             "number": resp_data.get("id", 0),
         }
 
+    @override
     def send_comment_msg(self, issue_number: int, msg: str) -> None:
         url = f"{self._get_repo_api_base()}/pull-requests/{issue_number}/comments"
         payload = {"text": msg}
         response = httpx.post(url, headers=self.headers, json=payload, verify=httpx_verify_option())
         response.raise_for_status()
 
+    @override
     def reply_to_comment(self, pr_number: int, comment_id: str, reply: str) -> None:
         url = f"{self._get_repo_api_base()}/pull-requests/{pr_number}/comments"
         payload = {
@@ -237,6 +248,7 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
         response = httpx.post(url, headers=self.headers, json=payload, verify=httpx_verify_option())
         response.raise_for_status()
 
+    @override
     def branch_exists(self, branch_name: str) -> bool:
         url = f"{self._get_repo_api_base()}/branches"
         try:
@@ -254,6 +266,7 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             logger.warning(f"Failed to check branch existence: {e}")
             return False
 
+    @override
     def get_default_branch_name(self) -> str:
         url = self._get_repo_api_base()
         try:
@@ -271,28 +284,31 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             logger.warning(f"Failed to get default branch name: {e}")
         return "master"
 
+    @override
     def download_issues(self) -> list[Any]:
         logger.warning(
             "BitbucketDCIssueHandler.download_issues not implemented; use get_issue() to fetch individual pull requests"
         )
         return []
 
+    @override
     def get_issue_comments(self, issue_number: int, comment_id: int | None = None) -> list[str] | None:
         logger.warning("BitbucketDCIssueHandler.get_issue_comments not implemented")
         return []
 
-    def get_issue_thread_comments(self, issue_number: int) -> list[str]:
+    def get_issue_thread_comments(self) -> list[str]:
         logger.warning("BitbucketDCIssueHandler.get_issue_thread_comments not implemented")
         return []
 
-    def get_issue_review_comments(self, issue_number: int) -> list[str]:
+    def get_issue_review_comments(self) -> list[str]:
         logger.warning("BitbucketDCIssueHandler.get_issue_review_comments not implemented")
         return []
 
-    def get_issue_review_threads(self, issue_number: int) -> list[ReviewThread]:
+    def get_issue_review_threads(self) -> list[ReviewThread]:
         logger.warning("BitbucketDCIssueHandler.get_issue_review_threads not implemented")
         return []
 
+    @override
     def get_context_from_external_issues_references(
         self,
         closing_issues: list[str],
@@ -305,12 +321,14 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
         # DC has no issue tracker; return closing_issues immediately without API calls
         return closing_issues
 
+    @override
     def request_reviewers(self, reviewer: str, pr_number: int) -> None:
         logger.warning("BitbucketDCIssueHandler.request_reviewers not implemented")
 
     def get_issue_references(self, body: str) -> list[int]:
         return extract_issue_references(body)
 
+    @override
     def get_converted_issues(
         self, issue_numbers: list[int] | None = None, comment_id: int | None = None
     ) -> list[Issue]:
@@ -322,7 +340,7 @@ class BitbucketDCIssueHandler(IssueHandlerInterface):
             try:
                 issue = call_async_from_sync(self.get_issue, GENERAL_TIMEOUT, issue_number)
                 converted_issues.append(issue)
-            except Exception as e:
+            except (httpx.HTTPError, TimeoutError, ValueError, ValidationError) as e:
                 logger.warning(f"Failed to fetch pull request {issue_number}: {e}")
 
         return converted_issues
@@ -332,11 +350,6 @@ class BitbucketDCPRHandler(BitbucketDCIssueHandler):
     """Handler for Bitbucket Data Center pull requests, extending the issue handler."""
 
     def __init__(
-        self,
-        owner: str,
-        repo: str,
-        token: str,
-        username: str | None = None,
-        base_domain: str = "bitbucket.example.com",
-    ):
+        self, owner: str, repo: str, token: str, username: str | None = None, base_domain: str = "bitbucket.example.com"
+    ) -> None:
         super().__init__(owner, repo, token, username, base_domain)

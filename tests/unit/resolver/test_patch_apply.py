@@ -2,7 +2,7 @@ from openhands.resolver.patching.apply import apply_diff
 from openhands.resolver.patching.patch import diffobj, parse_diff
 
 
-def test_patch_apply_with_empty_lines():
+def test_patch_apply_with_empty_lines() -> None:
     # The original file has no indentation and uses \n line endings
     original_content = "# PR Viewer\n\nThis React application allows you to view open pull requests from GitHub repositories in a GitHub organization. By default, it uses the OpenHands organization.\n\n## Setup"
 

@@ -1,24 +1,32 @@
+from typing import TypedDict, cast
+
 import pytest
 from pydantic import SecretStr
 
 from openhands.resolver.interfaces.azure_devops import AzureDevOpsIssueHandler
-from openhands.resolver.interfaces.forgejo import (
-    ForgejoIssueHandler,
-    ForgejoPRHandler,
-)
+from openhands.resolver.interfaces.forgejo import ForgejoIssueHandler, ForgejoPRHandler
 from openhands.resolver.interfaces.github import GithubIssueHandler, GithubPRHandler
 from openhands.resolver.interfaces.gitlab import GitlabIssueHandler, GitlabPRHandler
-from openhands.resolver.interfaces.issue_definitions import (
-    ServiceContextIssue,
-    ServiceContextPR,
-)
+from openhands.resolver.interfaces.issue_definitions import ServiceContextIssue, ServiceContextPR
 from openhands.resolver.issue_handler_factory import IssueHandlerFactory
 from openhands.resolver.provider import ProviderType
 from tests.unit.resolver.compat import LLMConfig
 
 
+class FactoryParams(TypedDict):
+    owner: str
+    repo: str
+    token: str
+    username: str
+    llm: LLMConfig
+
+
+class AzureFactoryParams(FactoryParams):
+    base_domain: str
+
+
 @pytest.fixture
-def llm_config():
+def llm_config() -> LLMConfig:
     return LLMConfig(
         model="test-model",
         api_key=SecretStr("test-key"),
@@ -26,7 +34,7 @@ def llm_config():
 
 
 @pytest.fixture
-def factory_params(llm_config):
+def factory_params(llm_config: LLMConfig) -> FactoryParams:
     return {
         "owner": "test-owner",
         "repo": "test-repo",
@@ -37,7 +45,7 @@ def factory_params(llm_config):
 
 
 @pytest.fixture
-def azure_factory_params(llm_config):
+def azure_factory_params(llm_config: LLMConfig) -> AzureFactoryParams:
     return {
         "owner": "test-org/test-project",
         "repo": "test-repo",
@@ -118,29 +126,32 @@ test_cases = [
 
 
 @pytest.mark.parametrize(
-    "platform,issue_type,base_domain,expected_context_type,expected_handler_type,use_azure_params",
+    ("platform", "issue_type", "base_domain", "expected_context_type", "expected_handler_type", "use_azure_params"),
     test_cases,
 )
 def test_handler_creation(
-    factory_params,
-    azure_factory_params,
+    factory_params: FactoryParams,
+    azure_factory_params: AzureFactoryParams,
     platform: ProviderType,
     issue_type: str,
     base_domain: str,
     expected_context_type: type,
     expected_handler_type: type,
     use_azure_params: bool,
-):
-    params = azure_factory_params if use_azure_params else {**factory_params, "base_domain": base_domain}
+) -> None:
+    params = cast(
+        AzureFactoryParams,
+        azure_factory_params if use_azure_params else {**factory_params, "base_domain": base_domain},
+    )
     factory = IssueHandlerFactory(**params, platform=platform, issue_type=issue_type)
 
     handler = factory.create()
 
     assert isinstance(handler, expected_context_type)
-    assert isinstance(handler._strategy, expected_handler_type)
+    assert isinstance(handler.strategy, expected_handler_type)
 
 
-def test_invalid_issue_type(factory_params):
+def test_invalid_issue_type(factory_params: FactoryParams) -> None:
     factory = IssueHandlerFactory(
         **factory_params,
         platform=ProviderType.GITHUB,
